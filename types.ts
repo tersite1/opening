@@ -108,17 +108,59 @@ export interface PlacedItem extends Product {
   warnings: string[];
 }
 
+// --- Quote Related Types (Updated) ---
+
+export type QuoteStatus = 'DRAFT' | 'REVIEWING' | 'CONFIRMED' | 'COMPLETED' | 'EXPIRED';
+
+// Timeline Item for Quote
+export interface TimelineItem {
+  stage: string;
+  duration: string;
+  description: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
+}
+
+// Scope Item for Quote (Included/Excluded)
+export interface ScopeItem {
+    category: string;
+    items: string[];
+    isIncluded: boolean; // true: 포함, false: 미포함(별도)
+}
+
 // Quote structure
 export interface Quote {
   id: string;
   packageId: string;
+  packageName: string; // 패키지명 표시용
+  
+  // Cost Breakdown
   itemsCost: number;
   logisticsCost: number;
   installationCost: number;
+  optionsCost: number; // 옵션 비용
+  discountAmount: number; // 할인
   vat: number;
   totalCost: number;
   deposit: number; // 10%
+
+  // Metadata
   date: string;
+  validUntil: string; // 만료일
+  status: QuoteStatus; // 상태
+  version: number; // 버전
+
+  // Details for View
+  scope: ScopeItem[]; // 포함/미포함 범위
+  timeline: TimelineItem[]; // 일정표
+  requirements: string[]; // 사용자 준비물
+  
+  // CS & Warranty
+  grade: string;
+  warrantyPeriod: string;
+  
+  // 3D & Consulting
+  has3D: boolean;
+  is3DLinkSent: boolean;
   consultingIncluded: boolean;
 }
 
