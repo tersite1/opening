@@ -48,6 +48,15 @@ export interface Product {
 
 export type ListingSource = 'USER' | 'OPENING'; // User Generated vs Platform Certified
 
+// User Interface
+export interface User {
+  id: string;
+  name: string;
+  phone: string;
+  type: 'KAKAO' | 'PHONE';
+  joinedDate: string;
+}
+
 // A package of items
 export interface Package {
   id: string;
@@ -213,7 +222,7 @@ export interface CategoryNode {
 }
 
 // Navigation Types
-export type MainTab = 'HOME' | 'LISTINGS' | 'QUOTE' | 'FAQ' | 'CONSULTING';
+export type MainTab = 'HOME' | 'LISTINGS' | 'QUOTE' | 'CONSULTING' | 'MORE';
 
 export type AppStep = 
   | 'TAB_VIEW' // Shows the main tabs
