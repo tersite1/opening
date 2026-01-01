@@ -6,7 +6,8 @@ import {
   ConsultingBooking,
   RoomDimensions,
   PlacedItem,
-  Quote
+  Quote,
+  User
 } from './types';
 import { 
   LOGISTICS_BASE_COST,
@@ -20,7 +21,7 @@ import { Sidebar } from './components/Sidebar';
 import { HomeView } from './components/HomeView';
 import { MyConsultationsView } from './components/MyConsultationsView';
 import { QuoteView } from './components/QuoteView';
-import { FAQView } from './components/FAQView';
+import { MoreView } from './components/MoreView';
 import { ListingsView } from './components/ListingsView';
 import { Button, Input } from './components/Components';
 import { ArrowLeft, Grid, DoorOpen, X } from 'lucide-react';
@@ -38,6 +39,9 @@ function App() {
   const [consultingBookings, setConsultingBookings] = useState<ConsultingBooking[]>([]);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [savedQuotes, setSavedQuotes] = useState<Quote[]>([]); 
+  
+  // User State (New)
+  const [user, setUser] = useState<User | null>(null);
 
   // Planner State
   const [room, setRoom] = useState<RoomDimensions>({
@@ -54,6 +58,23 @@ function App() {
   }, []);
 
   // --- Actions ---
+
+  // Login Handlers
+  const handleLogin = (type: 'KAKAO' | 'PHONE') => {
+      // Mock Login Logic
+      setUser({
+          id: 'u_12345',
+          name: '김오픈',
+          phone: '01012345678',
+          type,
+          joinedDate: '2024-01-01'
+      });
+  };
+
+  const handleLogout = () => {
+      setUser(null);
+      setCurrentTab('HOME'); // Go back to home after logout
+  };
 
   const startPlannerFlow = (pkg: Package) => {
     setSelectedPackage(pkg);
@@ -96,7 +117,6 @@ function App() {
     setAppMode('PLANNER');
   };
 
-  // [수정됨] 상세 견적 데이터 생성 로직 업데이트
   const handlePlannerNext = () => {
     if (selectedPackage) {
       const itemsCost = selectedPackage.totalPrice; 
@@ -185,7 +205,6 @@ function App() {
     );
   }
 
-  // ModalWrapper
   const ModalWrapper: React.FC<{ children: React.ReactNode, title: string, onClose: () => void, maxWidth?: string }> = ({ children, title, onClose, maxWidth = 'max-w-xl' }) => (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
@@ -351,8 +370,14 @@ function App() {
                 />
             )}
 
-            {currentTab === 'FAQ' && (
-                <FAQView onConsultingClick={() => startConsultingFlow()} />
+            {currentTab === 'MORE' && (
+                <MoreView 
+                    user={user}
+                    onLogin={handleLogin}
+                    onLogout={handleLogout}
+                    consultingCount={consultingBookings.filter(b => b.status === 'IN_PROGRESS').length}
+                    quoteCount={savedQuotes.length}
+                />
             )}
         </div>
       </main>
