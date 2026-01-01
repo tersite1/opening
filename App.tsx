@@ -13,7 +13,8 @@ import {
   LOGISTICS_BASE_COST,
   INSTALLATION_BASE_COST
 } from './constants';
-import { supabase } from './utils/supabaseClient'; // Supabase Client 추가
+import { supabase } from './utils/supabaseClient';
+import { fetchConsultings, createConsulting } from './utils/api'; // [추가] API 연동
 import { Planner2D } from './components/Planner2D';
 import { ConsultingModule } from './components/ConsultingModule';
 import { validateLayout } from './utils/plannerUtils';
@@ -62,6 +63,9 @@ function App() {
           type: 'KAKAO', // provider 정보는 session에서 확인 가능하나 일단 고정
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
+        
+        // [추가] 로그인 상태면 상담 내역 불러오기
+        fetchConsultings().then(data => setConsultingBookings(data));
       }
       setIsLoading(false); // 로딩 끝
     });
@@ -76,8 +80,11 @@ function App() {
           type: 'KAKAO',
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
+        // [추가] 로그인 시 상담 내역 불러오기
+        fetchConsultings().then(data => setConsultingBookings(data));
       } else {
         setUser(null);
+        setConsultingBookings([]); // 로그아웃 시 데이터 초기화
       }
       setIsLoading(false);
     });
@@ -119,11 +126,24 @@ function App() {
     setAppMode('CONSULTING_WIZARD');
   };
 
-  const handleConsultingComplete = (booking: ConsultingBooking) => {
-    const newBooking = { ...booking, id: `bk_${Date.now()}`, consultantName: '김오픈 프로', typeLabel: '창업 진단 30분' };
-    setConsultingBookings([newBooking, ...consultingBookings]);
-    setAppMode('TAB_VIEW');
-    setCurrentTab('CONSULTING'); 
+  // [수정] 상담 신청 완료 핸들러 (DB 저장 연동)
+  const handleConsultingComplete = async (booking: ConsultingBooking) => {
+    try {
+      // 1. DB에 저장
+      await createConsulting(booking);
+      
+      // 2. 최신 목록 다시 불러오기
+      const updatedList = await fetchConsultings();
+      setConsultingBookings(updatedList);
+      
+      // 3. 화면 이동 및 알림
+      setAppMode('TAB_VIEW');
+      setCurrentTab('CONSULTING'); 
+      alert("상담 신청이 성공적으로 접수되었습니다.");
+    } catch (error) {
+      console.error("상담 저장 실패:", error);
+      alert("저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    }
   };
 
   const handleSpaceSubmit = () => {
