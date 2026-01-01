@@ -5,7 +5,7 @@ import { Card, Badge, Button, Input } from './Components';
 import { 
   ChevronRight, Calendar, Clock, MapPin, CheckCircle, AlertCircle, 
   FileText, MessageSquare, UploadCloud, ChevronDown, MoreHorizontal,
-  Layout, ListTodo, FolderOpen, ArrowRight, X, Phone, Settings, RefreshCw
+  Layout, ListTodo, FolderOpen, ArrowRight, X, Phone, Settings, RefreshCw, Box
 } from 'lucide-react';
 
 interface MyConsultationsViewProps {
@@ -16,8 +16,9 @@ interface MyConsultationsViewProps {
 // Extended Status for UI
 type ProjectStatus = 'WAITING' | 'REQUESTING_DOCS' | 'DESIGNING' | 'REVIEWING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED';
 
-const getStatusLabel = (status: ProjectStatus) => {
+const getStatusLabel = (status: ProjectStatus | string) => {
     switch (status) {
+        case 'PENDING': return '접수 대기'; // bookings의 기본 상태 매핑
         case 'WAITING': return '대기 (접수완료)';
         case 'REQUESTING_DOCS': return '자료 요청중';
         case 'DESIGNING': return '설계/산출중';
@@ -25,12 +26,13 @@ const getStatusLabel = (status: ProjectStatus) => {
         case 'CONFIRMED': return '확정/결제대기';
         case 'IN_PROGRESS': return '진행중 (현장)';
         case 'COMPLETED': return '완료 (인수)';
-        default: return status;
+        default: return '진행중';
     }
 };
 
-const getStatusColor = (status: ProjectStatus) => {
+const getStatusColor = (status: ProjectStatus | string) => {
     switch (status) {
+        case 'PENDING': return 'gray';
         case 'WAITING': return 'gray';
         case 'REQUESTING_DOCS': return 'red'; // Action needed
         case 'DESIGNING': return 'blue';
@@ -48,34 +50,35 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
   // Detail View Tabs
   const [detailTab, setDetailTab] = useState<'DASHBOARD' | 'CHECKLIST' | 'TIMELINE' | 'FILES'>('DASHBOARD');
 
-  // --- Mock Data Enrichment ---
-  // 실제로는 bookings 데이터에 아래 필드들이 포함되어야 함.
-  // UI 테스트를 위해 선택된 booking에 임시 데이터를 매핑한다고 가정.
+  // --- Data Enrichment ---
   const activeBooking = bookings.find(b => b.id === selectedBookingId);
 
-  // Mock Project Data (Attached to activeBooking)
+  // Mock Project Data + Real Data Merge
   const projectData = activeBooking ? {
       ...activeBooking,
-      status: 'REQUESTING_DOCS' as ProjectStatus, // Mock Status
+      // 상태가 PENDING이면 '자료 요청중'으로 가정 (시나리오상)
+      status: activeBooking.status === 'PENDING' ? 'REQUESTING_DOCS' : activeBooking.status, 
       progress: 35, // %
       nextAction: '현장 실측 도면 업로드 필요',
-      lastUpdate: '2024.01.16 14:00',
+      lastUpdate: new Date().toLocaleDateString(),
+      // [중요] 실제 선택한 태스크 반영
       tasks: OPEN_PROCESS_TASKS.map(t => ({
           ...t,
-          status: ['used_package', 'consulting'].includes(t.id) ? 'DONE' : 'PENDING', // Mock initial state
-          isSelected: ['used_package', 'consulting', 'demolition'].includes(t.id)
+          // 완료 여부는 임의로 설정 (실제로는 DB에 저장된 상태 필요)
+          status: 'PENDING', 
+          // ★ 여기가 핵심: 사용자가 선택했는지 여부 확인
+          isSelected: activeBooking.selectedTaskIds?.includes(t.id)
       })),
       files: [
-          { name: '도면_v1.pdf', status: 'UPLOADED' },
-          { name: '현장사진_출입구.jpg', status: 'MISSING' },
-          { name: '사업자등록증', status: 'MISSING' }
+          { name: '사업자등록증', status: 'MISSING' },
+          { name: '현장 사진 (출입구)', status: 'MISSING' },
+          { name: '현장 사진 (내부)', status: 'MISSING' }
       ]
   } : null;
 
   // --- Handlers ---
   const handleTaskToggle = (taskId: string) => {
-      // In real app, this would update DB and trigger quote recalc
-      console.log('Toggle task:', taskId);
+      console.log('Toggle task (Read Only in MVP):', taskId);
   };
 
   // --- Render Sub-Components ---
@@ -98,20 +101,20 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                  <span className="text-xs text-gray-400">담당: {projectData?.consultantName} 매니저</span>
               </div>
               <h1 className="text-xl font-bold text-slate-900 leading-tight mb-1">
-                  {projectData?.businessType} 20평 ({projectData?.budget})
+                  {projectData?.businessType} ({projectData?.area}평)
               </h1>
               <div className="text-xs text-gray-500">
-                  {activeBooking?.date} 오픈 목표 · 서울 강남구
+                  {activeBooking?.targetDate ? `${activeBooking.targetDate} 오픈 목표` : '오픈일 미정'} · {activeBooking?.region || '지역 미정'}
               </div>
           </div>
 
-          {/* Quick Actions (5.4.1) */}
+          {/* Quick Actions */}
           <div className="grid grid-cols-3 gap-2 mb-2">
-              <Button size="sm" variant="outline" className="text-xs h-9">
+              <Button size="sm" variant="outline" className="text-xs h-9" onClick={() => setDetailTab('FILES')}>
                   <UploadCloud size={14} className="mr-1.5"/> 자료 업로드
               </Button>
               <Button size="sm" variant="outline" className="text-xs h-9" onClick={() => setDetailTab('CHECKLIST')}>
-                  <ListTodo size={14} className="mr-1.5"/> 체크 수정
+                  <ListTodo size={14} className="mr-1.5"/> 체크 확인
               </Button>
               <Button size="sm" variant="outline" className="text-xs h-9">
                   <MessageSquare size={14} className="mr-1.5"/> 담당 채팅
@@ -162,34 +165,19 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
           <div className="grid grid-cols-2 gap-3">
                <div className="bg-white p-4 rounded-xl border border-gray-200">
                    <div className="text-xs text-gray-500 mb-1">총 예산 (예상)</div>
-                   <div className="font-black text-lg text-slate-900">2,150만원</div>
+                   <div className="font-black text-lg text-slate-900">
+                       {projectData?.budget ? `${(Number(projectData.budget)/10000).toLocaleString()}만원` : '산출중'}
+                   </div>
                </div>
                <div className="bg-white p-4 rounded-xl border border-gray-200">
-                   <div className="text-xs text-gray-500 mb-1">오픈 D-Day</div>
-                   <div className="font-black text-lg text-brand-600">D-24</div>
+                   <div className="text-xs text-gray-500 mb-1">진행률</div>
+                   <div className="font-black text-lg text-brand-600">{projectData?.progress}%</div>
                </div>
-          </div>
-
-          {/* 3D Status (5.9) */}
-          <div className="bg-slate-900 text-white rounded-xl p-5">
-              <div className="flex justify-between items-start mb-4">
-                  <div>
-                      <h3 className="font-bold flex items-center gap-2">
-                          <Box className="text-yellow-400" size={18} /> 3D 인테리어
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-1">작업 완료 후 카카오톡 발송</p>
-                  </div>
-                  <Badge color="yellow">작업중</Badge>
-              </div>
-              <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden mb-2">
-                  <div className="bg-yellow-400 w-[60%] h-full" />
-              </div>
-              <p className="text-[10px] text-right text-slate-400">공정률 60%</p>
           </div>
 
           {/* Selected Services Summary */}
           <div>
-              <h3 className="font-bold text-slate-900 mb-3 text-sm">선택한 서비스</h3>
+              <h3 className="font-bold text-slate-900 mb-3 text-sm">선택한 서비스 현황</h3>
               <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
                   {projectData?.tasks.filter(t => t.isSelected).slice(0, 5).map(task => (
                       <div key={task.id} className="p-3 flex items-center justify-between">
@@ -208,7 +196,7 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
   const renderChecklistTab = () => (
       <div className="p-4 bg-gray-50 min-h-screen pb-20">
           <div className="text-sm text-gray-500 mb-4 px-1">
-              필요한 서비스를 체크하면 <strong>견적과 일정에 자동 반영</strong>됩니다.
+              선택하신 항목을 기반으로 <strong>견적서 v1</strong>이 작성됩니다.
           </div>
           
           <div className="space-y-6">
@@ -223,37 +211,22 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                               {tasks.map((task, idx) => (
                                   <div 
                                     key={task.id} 
-                                    className={`p-4 flex items-start gap-3 ${idx !== 0 ? 'border-t border-gray-100' : ''} hover:bg-gray-50 transition-colors cursor-pointer`}
-                                    onClick={() => handleTaskToggle(task.id)}
+                                    className={`p-4 flex items-start gap-3 ${idx !== 0 ? 'border-t border-gray-100' : ''} ${task.isSelected ? 'bg-brand-50/30' : ''}`}
                                   >
-                                      <div className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                      <div className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center
                                           ${task.isSelected ? 'bg-brand-600 border-brand-600' : 'bg-white border-gray-300'}`}>
                                           {task.isSelected && <CheckCircle size={14} className="text-white" />}
                                       </div>
                                       <div className="flex-1">
                                           <div className="flex justify-between items-start">
-                                              <span className={`text-sm font-bold ${task.isSelected ? 'text-slate-900' : 'text-gray-500'}`}>
+                                              <span className={`text-sm font-bold ${task.isSelected ? 'text-slate-900' : 'text-gray-400'}`}>
                                                   {task.title}
                                               </span>
                                               {task.isOpeningExclusive && (
-                                                  <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded font-bold">오프닝전용</span>
+                                                  <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded font-bold">오프닝</span>
                                               )}
                                           </div>
                                           <p className="text-xs text-gray-400 mt-0.5">{task.description}</p>
-                                          
-                                          {/* Detailed Settings (Expands when selected) */}
-                                          {task.isSelected && (
-                                              <div className="mt-3 pt-3 border-t border-gray-100 animate-in fade-in slide-in-from-top-1">
-                                                  <div className="flex gap-2 mb-2">
-                                                      <span className="text-xs font-bold text-gray-600">범위:</span>
-                                                      <span className="text-xs text-slate-900 bg-gray-100 px-2 rounded">전체</span>
-                                                      <Settings size={12} className="text-gray-400"/>
-                                                  </div>
-                                                  <div className="text-[10px] text-brand-600 flex items-center gap-1">
-                                                      <RefreshCw size={10} /> 견적 v2에 반영됨
-                                                  </div>
-                                              </div>
-                                          )}
                                       </div>
                                   </div>
                               ))}
@@ -276,7 +249,7 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                <Button fullWidth variant="outline">파일 선택하기</Button>
           </div>
 
-          <h3 className="font-bold text-slate-900 text-sm mb-3 px-1">필수 제출 자료</h3>
+          <h3 className="font-bold text-slate-900 text-sm mb-3 px-1">제출 목록</h3>
           <div className="space-y-3">
               {projectData?.files.map((file, idx) => (
                   <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center">
@@ -299,18 +272,10 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                {['계약/착수', '철거/기초', '인테리어/설비', '설치/배치', '준공청소', '오픈'].map((stage, idx) => (
                    <div key={idx} className="relative pl-6">
                        <div className={`absolute left-[-21px] top-0 w-4 h-4 rounded-full border-2 
-                           ${idx < 2 ? 'bg-brand-600 border-brand-600' : 'bg-white border-gray-300'}`} 
+                           ${idx < 1 ? 'bg-brand-600 border-brand-600' : 'bg-white border-gray-300'}`} 
                        />
-                       <h3 className={`font-bold text-sm mb-1 ${idx < 2 ? 'text-slate-900' : 'text-gray-400'}`}>{stage}</h3>
-                       <p className="text-xs text-gray-400">1월 {15 + idx * 5}일 예정</p>
-                       
-                       {idx === 1 && (
-                           <div className="mt-2 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                               <div className="text-xs font-bold text-brand-600 mb-1">진행중</div>
-                               <div className="text-sm text-slate-900">기존 집기 철거 작업</div>
-                               <div className="text-xs text-gray-500 mt-1">담당: 오프닝 파트너스</div>
-                           </div>
-                       )}
+                       <h3 className={`font-bold text-sm mb-1 ${idx < 1 ? 'text-slate-900' : 'text-gray-400'}`}>{stage}</h3>
+                       <p className="text-xs text-gray-400">일정 산출 중</p>
                    </div>
                ))}
           </div>
@@ -337,18 +302,18 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* 5.2.A Header Summary */}
+      {/* Header Summary */}
       <div className="bg-white p-6 border-b border-gray-100">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">내 상담</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">내 프로젝트</h1>
           
           <div className="flex gap-4 mb-6">
               <div className="flex-1 bg-brand-50 rounded-xl p-4 border border-brand-100">
-                  <div className="text-2xl font-black text-brand-600 mb-1">{activeCount}</div>
-                  <div className="text-xs text-brand-800 font-bold">진행중</div>
+                  <div className="text-2xl font-black text-brand-600 mb-1">{waitingCount + activeCount}</div>
+                  <div className="text-xs text-brand-800 font-bold">전체 프로젝트</div>
               </div>
               <div className="flex-1 bg-white rounded-xl p-4 border border-gray-200">
                   <div className="text-2xl font-black text-slate-900 mb-1">{waitingCount}</div>
-                  <div className="text-xs text-gray-500">대기/접수</div>
+                  <div className="text-xs text-gray-500">진행/설계중</div>
               </div>
               <div className="flex-1 bg-white rounded-xl p-4 border border-gray-200 opacity-50">
                   <div className="text-2xl font-black text-slate-900 mb-1">0</div>
@@ -356,7 +321,6 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
               </div>
           </div>
 
-          {/* Action Required Alert */}
           {bookings.length > 0 && (
               <div className="bg-slate-900 rounded-xl p-4 text-white flex justify-between items-center shadow-lg shadow-slate-200">
                   <div className="flex items-center gap-3">
@@ -373,13 +337,13 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
           )}
       </div>
 
-      {/* 5.2.B List */}
+      {/* List */}
       <div className="p-4 space-y-4">
           <h2 className="font-bold text-slate-900 text-lg">프로젝트 목록</h2>
           {bookings.length === 0 ? (
               <div className="text-center py-20">
                   <FolderOpen size={48} className="mx-auto text-gray-200 mb-4" />
-                  <p className="text-gray-400 mb-4">진행 중인 상담이 없습니다.</p>
+                  <p className="text-gray-400 mb-4">진행 중인 프로젝트가 없습니다.</p>
                   <Button onClick={onBookConsulting}>새로운 상담 신청</Button>
               </div>
           ) : (
@@ -390,29 +354,33 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                     className="p-5 cursor-pointer hover:shadow-md transition-shadow group"
                   >
                       <div className="flex justify-between items-start mb-3">
-                          <Badge color={getStatusColor(booking.status as any)}>{getStatusLabel(booking.status as any)}</Badge>
+                          <Badge color={getStatusColor(booking.status)}>{getStatusLabel(booking.status)}</Badge>
                           <span className="text-xs text-gray-400">{booking.date}</span>
                       </div>
                       
                       <h3 className="font-bold text-lg text-slate-900 mb-1 group-hover:text-brand-600 transition-colors">
-                          {booking.businessType} 20평 프로젝트
+                          {booking.businessType} {booking.area ? `${booking.area}평` : ''} 프로젝트
                       </h3>
                       <p className="text-sm text-gray-500 mb-4 line-clamp-1">
-                          {booking.consultantName} 매니저 · 서울 강남구
+                          {booking.consultantName} 매니저 · {booking.region || '지역 미정'}
                       </p>
 
-                      {/* Service Icons Summary */}
-                      <div className="flex gap-2 mb-4 pt-4 border-t border-gray-50">
-                          {['철거', '인테리어', '패키지', '간판'].map((s, i) => (
-                              <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
-                                  {s}
-                              </span>
-                          ))}
-                          <span className="text-[10px] text-gray-400 px-1.5 py-0.5">+2</span>
+                      <div className="flex gap-2 mb-4 pt-4 border-t border-gray-50 overflow-hidden">
+                          {booking.selectedTaskIds?.slice(0, 4).map((taskId, i) => {
+                              const taskName = OPEN_PROCESS_TASKS.find(t => t.id === taskId)?.title || taskId;
+                              return (
+                                <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                                    {taskName}
+                                </span>
+                              )
+                          })}
+                          {(booking.selectedTaskIds?.length || 0) > 4 && (
+                              <span className="text-[10px] text-gray-400 px-1.5 py-0.5">+{booking.selectedTaskIds.length - 4}</span>
+                          )}
                       </div>
 
                       <div className="flex justify-between items-center text-xs font-bold text-brand-600">
-                          <span>{booking.status === 'PENDING' ? '담당자 배정 대기중' : '견적 v1 도착함'}</span>
+                          <span>바로가기</span>
                           <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                       </div>
                   </Card>
