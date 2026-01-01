@@ -14,7 +14,8 @@ import {
   INSTALLATION_BASE_COST
 } from './constants';
 import { supabase } from './utils/supabaseClient';
-import { fetchConsultings, createConsulting } from './utils/api'; // [추가] API 연동
+// [수정] 견적 API (fetchQuotes, createQuote) 추가
+import { fetchConsultings, createConsulting, fetchQuotes, createQuote } from './utils/api'; 
 import { Planner2D } from './components/Planner2D';
 import { ConsultingModule } from './components/ConsultingModule';
 import { validateLayout } from './utils/plannerUtils';
@@ -64,8 +65,11 @@ function App() {
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
         
-        // [추가] 로그인 상태면 상담 내역 불러오기
-        fetchConsultings().then(data => setConsultingBookings(data));
+        // [수정] 로그인 상태면 상담 내역과 견적 내역 모두 불러오기
+        Promise.all([
+          fetchConsultings().then(setConsultingBookings),
+          fetchQuotes().then(setSavedQuotes)
+        ]).catch(console.error);
       }
       setIsLoading(false); // 로딩 끝
     });
@@ -80,11 +84,15 @@ function App() {
           type: 'KAKAO',
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
-        // [추가] 로그인 시 상담 내역 불러오기
-        fetchConsultings().then(data => setConsultingBookings(data));
+        // [수정] 로그인 시 데이터 병렬 로딩
+        Promise.all([
+          fetchConsultings().then(setConsultingBookings),
+          fetchQuotes().then(setSavedQuotes)
+        ]).catch(console.error);
       } else {
         setUser(null);
         setConsultingBookings([]); // 로그아웃 시 데이터 초기화
+        setSavedQuotes([]);
       }
       setIsLoading(false);
     });
@@ -126,7 +134,7 @@ function App() {
     setAppMode('CONSULTING_WIZARD');
   };
 
-  // [수정] 상담 신청 완료 핸들러 (DB 저장 연동)
+  // 상담 신청 완료 핸들러 (DB 저장 연동)
   const handleConsultingComplete = async (booking: ConsultingBooking) => {
     try {
       // 1. DB에 저장
@@ -220,12 +228,24 @@ function App() {
     }
   };
 
-  const handleSaveQuote = () => {
+  // [수정] 견적 저장 핸들러 (DB 연동)
+  const handleSaveQuote = async () => {
       if(quote) {
-          setSavedQuotes([quote, ...savedQuotes]);
-          alert("견적이 저장되었습니다.");
-          setAppMode('TAB_VIEW');
-          setCurrentTab('QUOTE');
+          try {
+              // 1. DB에 저장
+              await createQuote(quote);
+              
+              // 2. 최신 목록 다시 불러오기
+              const updatedQuotes = await fetchQuotes();
+              setSavedQuotes(updatedQuotes);
+              
+              alert("견적이 안전하게 저장되었습니다.");
+              setAppMode('TAB_VIEW');
+              setCurrentTab('QUOTE');
+          } catch (error) {
+              console.error("견적 저장 실패:", error);
+              alert("견적 저장에 실패했습니다. 로그인 상태를 확인해주세요.");
+          }
       }
   }
 
