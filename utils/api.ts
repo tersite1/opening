@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
-import { ConsultingBooking } from '../types';
+import { ConsultingBooking, Quote } from '../types';
 
-// [수정] 상담 내역 불러오기 (files 컬럼 추가 매핑)
+// 1. 상담 내역 불러오기 (files 컬럼 포함)
 export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
   const { data, error } = await supabase
     .from('consultings')
@@ -13,6 +13,7 @@ export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
     return [];
   }
 
+  // DB 데이터 -> 앱 데이터 타입 변환
   return data.map((item: any) => ({
     id: item.id,
     businessType: item.business_type,
@@ -21,17 +22,16 @@ export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
     budget: item.budget,
     targetDate: item.target_date,
     status: item.status,
-    consultantName: '김오픈 프로',
+    consultantName: '김오픈 프로', // 임시 고정
     typeLabel: '맞춤 오픈 상담',
     selectedTaskIds: item.selected_task_ids || [],
     taskDetails: item.task_details || [],
-    // [추가] DB의 files JSON 데이터를 앱에서 쓸 수 있게 변환
     files: item.files || [], 
     date: new Date(item.created_at).toLocaleDateString(),
   })) as ConsultingBooking[];
 };
 
-// [기존 유지] 상담 신청하기
+// 2. 상담 신청하기 (저장)
 export const createConsulting = async (booking: ConsultingBooking) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다.');
@@ -59,25 +59,25 @@ export const createConsulting = async (booking: ConsultingBooking) => {
   return data;
 };
 
-// [신규] 파일 업로드 함수
+// 3. 파일 업로드 함수 (Storage + DB Update)
 export const uploadConsultingFile = async (consultingId: string, file: File) => {
-    // 1. Storage에 파일 업로드
-    // 파일명 중복 방지를 위해 timestamp 추가
+    // A. Storage에 파일 업로드
     const fileExt = file.name.split('.').pop();
+    // 파일명 중복 방지를 위해 timestamp 추가
     const fileName = `${consultingId}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
     
     const { error: uploadError } = await supabase.storage
-        .from('uploads') // 1단계에서 만든 버킷 이름
+        .from('uploads') // 'uploads' 버킷 사용
         .upload(fileName, file);
 
     if (uploadError) throw uploadError;
 
-    // 2. 업로드된 파일의 공개 URL 가져오기
+    // B. 업로드된 파일의 공개 URL 가져오기
     const { data: { publicUrl } } = supabase.storage
         .from('uploads')
         .getPublicUrl(fileName);
 
-    // 3. DB 업데이트 (기존 파일 목록에 추가)
+    // C. DB 업데이트 (기존 파일 목록에 추가)
     // 먼저 현재 파일 목록을 가져옵니다.
     const { data: currentData, error: fetchError } = await supabase
         .from('consultings')
@@ -107,6 +107,7 @@ export const uploadConsultingFile = async (consultingId: string, file: File) => 
     return updatedFiles;
 };
 
+// 4. 견적서 목록 불러오기
 export const fetchQuotes = async (): Promise<Quote[]> => {
   const { data, error } = await supabase
     .from('quotes')
@@ -150,7 +151,7 @@ export const fetchQuotes = async (): Promise<Quote[]> => {
   })) as Quote[];
 };
 
-// [추가] 견적서 저장하기
+// 5. 견적서 저장하기
 export const createQuote = async (quote: Quote) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다.');
@@ -173,7 +174,7 @@ export const createQuote = async (quote: Quote) => {
         total_cost: quote.totalCost,
         deposit: quote.deposit,
         
-        valid_until: quote.validUntil, // Date string formatting might be needed depending on input
+        valid_until: quote.validUntil,
         status: quote.status,
         version: quote.version,
         
