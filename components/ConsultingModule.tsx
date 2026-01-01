@@ -1,373 +1,328 @@
 import React, { useState } from 'react';
-import { ConsultingBooking, OpenTaskItem, OpenTaskCategory } from '../types';
-import { OPEN_PROCESS_TASKS, OPEN_TASK_CATEGORIES, MOCK_CONSULTING_OPTIONS } from '../constants';
+import { ConsultingBooking, OpenTaskItem, TaskDetailData, TaskCategoryGroup } from '../types';
+import { OPEN_PROCESS_TASKS, OPEN_TASK_CATEGORIES } from '../constants';
 import { Button, Input, Badge } from './Components';
 import { 
-  Calendar, CheckCircle, ChevronDown, ChevronUp, FileText, 
-  Clock, AlertCircle, Upload, ArrowRight, Check, MapPin, 
-  Hammer, ShoppingBag, ShieldCheck, Zap, Box
+  Check, X, ArrowRight, Settings, MapPin, Hammer, ShoppingBag, 
+  ShieldCheck, Zap, Box, FileText, Bike, Wine
 } from 'lucide-react';
 
 interface ConsultingModuleProps {
   onComplete: (booking: ConsultingBooking) => void;
   onCancel: () => void;
-  preSelectedPackageId?: string; 
+  initialContext?: { 
+    businessType?: string; 
+    region?: string;
+    area?: number;
+    budget?: number;
+  };
 }
 
-type Step = 'INFO' | 'CHECKLIST' | 'UPLOAD' | 'SCHEDULE' | 'CONFIRM';
-
-export const ConsultingModule: React.FC<ConsultingModuleProps> = ({ onComplete, onCancel, preSelectedPackageId }) => {
-  const [step, setStep] = useState<Step>('INFO');
+export const ConsultingModule: React.FC<ConsultingModuleProps> = ({ 
+  onComplete, onCancel, initialContext 
+}) => {
+  // --- States ---
   
-  // Step 1: Info Data
-  const [formData, setFormData] = useState({
-    businessType: '',
-    status: '', // '점포없음', '후보있음', '계약완료'
-    budget: '',
-    area: '',
-    openDate: '',
+  // 1. Context Info (Top Bar)
+  const [context, setContext] = useState({
+    businessType: initialContext?.businessType || '업종 미정',
+    region: initialContext?.region || '',
+    area: initialContext?.area || 0,
+    budget: initialContext?.budget || 0,
+    targetDate: '',
   });
+  const [isEditingContext, setIsEditingContext] = useState(false);
 
-  // Step 2: Selected Tasks (Set of IDs)
-  // Fix: explicitly type the Set as string
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set<string>(
-    preSelectedPackageId ? ['used_package', 'consulting'] : []
-  ));
-
-  // Step 3: Schedule
-  const [selectedSlot, setSelectedSlot] = useState<{date: string, time: string} | null>(null);
+  // 2. Checklist Selection
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  
+  // 3. Task Details (Map taskId -> Data)
+  const [taskDetails, setTaskDetails] = useState<Record<string, TaskDetailData>>({});
+  
+  // 4. UI State: Detail Sheet
+  const [activeSheetTask, setActiveSheetTask] = useState<OpenTaskItem | null>(null);
 
   // --- Handlers ---
-  
+
   const toggleTask = (taskId: string) => {
-    // Copy the set to trigger re-render
-    const newSet = new Set<string>(selectedTaskIds);
-    if (newSet.has(taskId)) {
-      newSet.delete(taskId);
+    const next = new Set(selectedTaskIds);
+    if (next.has(taskId)) {
+      next.delete(taskId);
     } else {
-      newSet.add(taskId);
+      next.add(taskId);
     }
-    setSelectedTaskIds(newSet);
+    setSelectedTaskIds(next);
   };
 
-  const getTaskById = (id: string) => OPEN_PROCESS_TASKS.find(t => t.id === id);
+  const openDetailSheet = (task: OpenTaskItem) => {
+    if (!selectedTaskIds.has(task.id)) {
+        toggleTask(task.id);
+    }
+    setActiveSheetTask(task);
+  };
 
-  // --- Calculations ---
-  const selectedTasks = Array.from(selectedTaskIds).map((id) => getTaskById(id as string)).filter(Boolean) as OpenTaskItem[];
-  const has3DLink = selectedTaskIds.has('3d_link');
-  
-  // Lead Time Calculation (Rough Estimate)
-  const maxLeadTimeWeeks = selectedTasks.reduce((acc, task) => {
-      if(task.leadTime.includes('주')) return Math.max(acc, parseInt(task.leadTime));
-      return acc;
-  }, 1);
+  const saveTaskDetail = (taskId: string, data: Partial<TaskDetailData>) => {
+    setTaskDetails(prev => ({
+      ...prev,
+      [taskId]: { ...prev[taskId], taskId, ...data }
+    }));
+  };
 
-  // --- Helpers ---
-  // Icon Component for Cleaning
-  const Sparkles = ({size}: {size: number}) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 9h4"/></svg>
-  );
+  const handleSubmit = () => {
+    const booking: ConsultingBooking = {
+      id: `bk_${Date.now()}`,
+      businessType: context.businessType,
+      region: context.region,
+      area: context.area,
+      budget: context.budget,
+      targetDate: context.targetDate,
+      status: 'PENDING',
+      consultantName: '배정중',
+      typeLabel: '맞춤 오픈 상담',
+      selectedTaskIds: Array.from(selectedTaskIds),
+      taskDetails: Object.values(taskDetails),
+      date: new Date().toLocaleDateString(),
+    };
+    onComplete(booking);
+  };
 
-  const getTaskIcon = (id: string) => {
-      if(id.includes('store')) return MapPin;
-      if(id.includes('demo')) return Hammer;
-      if(id.includes('interior')) return Hammer;
-      if(id.includes('sign')) return MapPin;
-      if(id.includes('clean')) return Sparkles;
-      if(id.includes('network')) return Zap;
-      if(id.includes('insur')) return ShieldCheck;
-      if(id.includes('bever')) return ShoppingBag;
-      if(id.includes('deliv')) return ShoppingBag;
-      if(id.includes('used')) return ShoppingBag;
-      if(id.includes('3d')) return Box;
-      if(id.includes('consult')) return FileText;
-      return CheckCircle;
-  }
+  // --- Icons ---
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'hammer': return Hammer;
+      case 'paint': return Hammer;
+      case 'sign': return MapPin; 
+      case 'sparkles': return ShieldCheck;
+      case 'wifi': return Zap;
+      case 'shield': return ShieldCheck;
+      case 'wine': return Wine;
+      case 'bike': return Bike;
+      case 'map': return MapPin;
+      case 'book': return FileText;
+      case 'box': return Box;
+      case 'user': return FileText;
+      case 'cube': return Box;
+      default: return Check;
+    }
+  };
 
-  // --- Render Steps ---
+  // --- Sub-Components ---
 
-  const renderInfoStep = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-900">오픈 상담 신청</h2>
-        <p className="text-slate-500 text-sm mt-1">기본 정보를 입력하면 딱 맞는 체크리스트를 추천해드려요.</p>
-      </div>
-
-      <div className="space-y-4">
+  const renderContextBar = () => (
+    <div className="bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-md">
+      <div className="flex justify-between items-start">
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">현재 진행 상태</label>
-          <div className="flex gap-2 flex-wrap">
-            {['점포 알아봄', '후보지 있음', '계약 완료', '철거 필요'].map(s => (
-              <button
-                key={s}
-                onClick={() => setFormData({...formData, status: s})}
-                className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all
-                  ${formData.status === s 
-                    ? 'bg-brand-600 text-white border-brand-600' 
-                    : 'bg-white text-gray-500 border-gray-200 hover:border-brand-300'}`}
-              >
-                {s}
-              </button>
-            ))}
+          <div className="text-[10px] text-slate-400 font-bold mb-1">선택된 창업 모델</div>
+          <div className="text-lg font-bold flex items-center gap-2">
+            {context.businessType} 
+            <button onClick={() => setIsEditingContext(!isEditingContext)} className="text-slate-400 hover:text-white">
+                <Settings size={14}/>
+            </button>
+          </div>
+          <div className="flex gap-2 mt-2 text-xs text-slate-300 flex-wrap">
+            <Badge color="dark">{context.region || '지역 미정'}</Badge>
+            <Badge color="dark">{context.area ? `${context.area}평` : '평수 미정'}</Badge>
+            <Badge color="dark">{context.budget ? `${Number(context.budget) / 10000}만원` : '예산 미정'}</Badge>
           </div>
         </div>
-
-        <Input 
-          label="업종 (예: 카페, 술집)" 
-          value={formData.businessType}
-          onChange={e => setFormData({...formData, businessType: e.target.value})}
-          placeholder="예: 10평대 개인카페"
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-            <Input 
-                label="예상 예산" 
-                value={formData.budget}
-                onChange={e => setFormData({...formData, budget: e.target.value})}
-                placeholder="예: 3000만원"
-                suffix="원"
-            />
-             <Input 
-                label="면적" 
-                value={formData.area}
-                onChange={e => setFormData({...formData, area: e.target.value})}
-                placeholder="예: 12"
-                suffix="평"
-            />
-        </div>
-        
-        <Input 
-            label="오픈 희망일" 
-            type="date"
-            value={formData.openDate}
-            onChange={e => setFormData({...formData, openDate: e.target.value})}
-        />
+        <button onClick={onCancel} className="p-1 hover:bg-slate-700 rounded-full"><X size={20}/></button>
       </div>
-
-      <div className="pt-4">
-        <Button fullWidth size="lg" onClick={() => setStep('CHECKLIST')} disabled={!formData.businessType}>
-          다음: 할 일 선택하기
-        </Button>
-      </div>
-    </div>
-  );
-
-  const renderChecklistStep = () => (
-    <div className="pb-20 relative min-h-[60vh]">
-       <div className="text-center mb-6">
-        <h2 className="text-xl font-bold text-slate-900">오픈 체크리스트</h2>
-        <p className="text-slate-500 text-sm mt-1">필요한 항목을 선택하면 견적과 일정을 정리해드립니다.</p>
-      </div>
-
-      {/* Recommended Toggle (Mock) */}
-      <div className="flex bg-gray-100 p-1 rounded-lg mb-6 text-xs font-bold text-gray-500">
-          <button className="flex-1 py-1.5 bg-white shadow-sm rounded text-brand-700">오프닝 추천</button>
-          <button className="flex-1 py-1.5">최저 비용</button>
-          <button className="flex-1 py-1.5">최단 기간</button>
-      </div>
-
-      <div className="space-y-3">
-        {OPEN_TASK_CATEGORIES.map(category => {
-            const tasksInCategory = OPEN_PROCESS_TASKS.filter(t => t.category === category.id);
-            if(tasksInCategory.length === 0) return null;
-
-            return (
-                <div key={category.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    {/* Category Header */}
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                        <div>
-                            <span className="font-bold text-slate-800 text-sm">{category.label}</span>
-                            <p className="text-[10px] text-gray-500">{category.description}</p>
-                        </div>
-                    </div>
-                    
-                    {/* Task Cards */}
-                    <div className="divide-y divide-gray-100">
-                        {tasksInCategory.map(task => {
-                             const isSelected = selectedTaskIds.has(task.id);
-                             const Icon = getTaskIcon(task.id);
-
-                             return (
-                                <div 
-                                    key={task.id}
-                                    onClick={() => toggleTask(task.id)}
-                                    className={`p-4 cursor-pointer transition-all flex items-start gap-3
-                                        ${isSelected ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
-                                >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
-                                        ${isSelected ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 text-gray-400'}`}>
-                                        <Icon size={16} />
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-start mb-0.5">
-                                            <h4 className={`text-sm font-bold ${isSelected ? 'text-brand-800' : 'text-slate-700'}`}>
-                                                {task.title}
-                                            </h4>
-                                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors
-                                                ${isSelected ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-300 bg-white'}`}>
-                                                {isSelected && <Check size={12} strokeWidth={3} />}
-                                            </div>
-                                        </div>
-                                        <p className="text-xs text-gray-500 mb-2">{task.description}</p>
-                                        <div className="flex gap-2">
-                                            <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">
-                                                {task.leadTime}
-                                            </span>
-                                            {task.isOpeningExclusive && (
-                                                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 font-bold">
-                                                    오프닝 전용
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                             )
-                        })}
-                    </div>
-                </div>
-            )
-        })}
-      </div>
-
-      {/* Fixed Footer for 3D Link */}
-      {has3DLink && (
-          <div className="fixed bottom-[80px] left-0 right-0 max-w-2xl mx-auto px-4 z-10 pointer-events-none">
-              <div className="bg-slate-800/90 backdrop-blur text-white text-xs py-2 px-4 rounded-lg shadow-lg text-center animate-in slide-in-from-bottom-2">
-                  <span className="font-bold text-yellow-400 mr-1">알림</span> 
-                  3D 인테리어 체험 링크는 작업 완료 후 <strong className="underline">카카오톡</strong>으로 발송됩니다.
+      
+      {isEditingContext && (
+          <div className="mt-4 pt-4 border-t border-slate-700 space-y-3 animate-in fade-in">
+              <Input label="업종" value={context.businessType} onChange={e => setContext({...context, businessType: e.target.value})} className="bg-slate-800 border-slate-600 text-white"/>
+              <div className="grid grid-cols-2 gap-2">
+                  <Input label="지역" value={context.region} onChange={e => setContext({...context, region: e.target.value})} className="bg-slate-800 border-slate-600 text-white"/>
+                  <Input label="평수" type="number" value={context.area} onChange={e => setContext({...context, area: Number(e.target.value)})} className="bg-slate-800 border-slate-600 text-white"/>
               </div>
+              <Button size="sm" fullWidth onClick={() => setIsEditingContext(false)}>수정 완료</Button>
           </div>
       )}
-
-      {/* Bottom Summary Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-20">
-         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
-             <div className="flex flex-col">
-                 <span className="text-xs text-gray-500 font-bold">선택 {selectedTasks.length}개 항목</span>
-                 <span className="text-sm font-bold text-brand-700">예상 준비기간 {maxLeadTimeWeeks}주~</span>
-             </div>
-             <Button onClick={() => setStep('UPLOAD')} disabled={selectedTasks.length === 0} className="px-8">
-                 이대로 진행 <ArrowRight size={16} className="ml-2" />
-             </Button>
-         </div>
-      </div>
     </div>
   );
 
-  const renderUploadStep = () => (
-     <div className="space-y-6">
-        <div className="text-center">
-            <h2 className="text-xl font-bold text-slate-900">자료 업로드 (선택)</h2>
-            <p className="text-slate-500 text-sm mt-1">현장 사진이나 도면이 있으면 더 정확한 견적이 가능해요.</p>
-        </div>
-
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 hover:border-brand-300 transition-colors cursor-pointer">
-            <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Upload size={24} />
-            </div>
-            <h3 className="font-bold text-gray-700">사진/도면 파일 추가</h3>
-            <p className="text-xs text-gray-400 mt-1">JPG, PNG, PDF (최대 10MB)</p>
-        </div>
-        
-        <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-lg flex gap-3 items-start">
-            <AlertCircle className="text-yellow-600 shrink-0 mt-0.5" size={18} />
-            <div className="text-sm text-yellow-800">
-                <p className="font-bold mb-1">아직 자료가 없으신가요?</p>
-                <p>괜찮습니다! 상담 시 매니저에게 현장 상황을 설명해주시면 됩니다. 나중에 카카오톡으로 보내주셔도 돼요.</p>
-            </div>
-        </div>
-
-        <div className="pt-8 flex gap-3">
-            <Button variant="outline" fullWidth onClick={() => setStep('CHECKLIST')}>이전</Button>
-            <Button fullWidth onClick={() => setStep('SCHEDULE')}>다음</Button>
-        </div>
-     </div>
-  );
-
-  const renderScheduleStep = () => {
-    const slots = [
-        { date: '오늘', times: ['14:00', '15:30', '17:00'] },
-        { date: '내일', times: ['10:00', '11:30', '14:00'] },
-        { date: '모레', times: ['13:00', '16:00'] },
-    ];
+  const renderDetailSheet = () => {
+    if (!activeSheetTask) return null;
+    const task = activeSheetTask;
+    const detail = taskDetails[task.id] || {};
+    
+    // 항목별 특화 필드 (간소화 버전)
+    const renderSpecificFields = () => {
+        switch(task.id) {
+            case 'interior': return (
+                <>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">공사 범위</label>
+                    <div className="flex gap-2 mb-4">
+                        {['전체 공사', '부분 공사', '감리만'].map(opt => (
+                            <button key={opt} 
+                                onClick={() => saveTaskDetail(task.id, { scope: opt })}
+                                className={`flex-1 py-2 text-xs border rounded ${detail.scope === opt ? 'bg-brand-600 text-white border-brand-600' : 'bg-white'}`}
+                            >{opt}</button>
+                        ))}
+                    </div>
+                    <Input label="선호 스타일" placeholder="예: 모던, 우드, 화이트" value={detail.style || ''} onChange={e => saveTaskDetail(task.id, { style: e.target.value })} />
+                </>
+            );
+            case '3d_link': return (
+                <div className="bg-brand-50 p-3 rounded-lg mb-4">
+                    <p className="text-xs text-brand-700 font-bold mb-1">📢 필수 안내</p>
+                    <p className="text-xs text-brand-600">3D 인테리어 체험 링크는 작업 완료 후 <span className="underline">카카오톡 링크</span>로 발송됩니다.</p>
+                </div>
+            );
+            default: return <p className="text-xs text-gray-400">추가 상세 설정이 필요하면 상담 시 말씀해주세요.</p>;
+        }
+    };
 
     return (
-        <div className="space-y-6">
-            <div className="text-center">
-                <h2 className="text-xl font-bold text-slate-900">상담 일정 선택</h2>
-                <p className="text-slate-500 text-sm mt-1">전문가가 선택하신 항목을 미리 검토하고 연락드립니다.</p>
-            </div>
-
-            <div className="grid gap-4">
-                {slots.map((slot, idx) => (
-                <div key={idx} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
-                    <div className="font-bold text-slate-700 mb-2 flex items-center gap-2">
-                        <Calendar size={16} className="text-brand-600"/> {slot.date}
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setActiveSheetTask(null)} />
+            <div className="bg-white w-full max-w-xl rounded-t-2xl p-5 relative z-10 animate-in slide-in-from-bottom duration-300 max-h-[80vh] overflow-y-auto">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <div className="text-xs text-brand-600 font-bold mb-1">{OPEN_TASK_CATEGORIES.find(c => c.id === task.category)?.label}</div>
+                        <h3 className="text-xl font-bold text-slate-900">{task.title} 상세 설정</h3>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                    {slot.times.map(t => (
-                        <button
-                        key={t}
-                        onClick={() => setSelectedSlot({date: slot.date, time: t})}
-                        className={`px-4 py-2 rounded-lg text-sm border transition-all
-                            ${selectedSlot?.date === slot.date && selectedSlot?.time === t 
-                            ? 'bg-brand-600 text-white border-brand-600 shadow-md ring-2 ring-brand-100' 
-                            : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300 hover:bg-brand-50'
-                            }`}
-                        >
-                        {t}
-                        </button>
-                    ))}
+                    <button onClick={() => setActiveSheetTask(null)} className="p-1 bg-gray-100 rounded-full"><X size={20}/></button>
+                </div>
+
+                <div className="space-y-6">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-2">우선순위 (1택)</label>
+                        <div className="flex gap-2">
+                            {[
+                                {k: 'COST', l: '비용 절감'}, {k: 'SPEED', l: '속도 우선'}, {k: 'QUALITY', l: '품질 우선'}
+                            ].map(opt => (
+                                <button key={opt.k}
+                                    onClick={() => saveTaskDetail(task.id, { priority: opt.k as any })}
+                                    className={`flex-1 py-3 text-sm font-bold border rounded-lg transition-colors
+                                        ${detail.priority === opt.k 
+                                            ? 'bg-slate-800 text-white border-slate-800' 
+                                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                >{opt.l}</button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100">
+                        {renderSpecificFields()}
+                    </div>
+
+                    <div className="pt-2">
+                        <Input label="특이사항 / 요청사항" value={detail.note || ''} onChange={e => saveTaskDetail(task.id, { note: e.target.value })} placeholder="예: 층고가 높아요, 엘리베이터 없어요" />
                     </div>
                 </div>
-                ))}
-            </div>
 
-             <div className="pt-8 flex gap-3">
-                <Button variant="outline" fullWidth onClick={() => setStep('UPLOAD')}>이전</Button>
-                <Button fullWidth onClick={handleConfirm} disabled={!selectedSlot}>상담 확정하기</Button>
+                <div className="mt-8">
+                    <Button fullWidth onClick={() => setActiveSheetTask(null)}>설정 저장</Button>
+                </div>
             </div>
         </div>
     );
   };
 
-  const handleConfirm = () => {
-      if(!selectedSlot) return;
-      
-      const booking: ConsultingBooking = {
-          id: `bk_${Date.now()}`,
-          date: selectedSlot.date,
-          timeSlot: selectedSlot.time,
-          businessType: formData.businessType,
-          budget: formData.budget,
-          status: 'CONFIRMED',
-          consultantName: '배정중',
-          typeLabel: '오픈 종합 상담',
-          selectedTasks: Array.from(selectedTaskIds)
-      };
-      onComplete(booking);
-  }
-
   return (
-    <div className="max-w-2xl mx-auto py-6 px-4">
-        {/* Header Navigation (Hidden on Confirmation) */}
-        {step !== 'CONFIRM' && (
-            <div className="flex justify-center mb-8 gap-2">
-                {['INFO', 'CHECKLIST', 'UPLOAD', 'SCHEDULE'].map((s, idx) => {
-                    const stepOrder = ['INFO', 'CHECKLIST', 'UPLOAD', 'SCHEDULE'];
-                    const currentIdx = stepOrder.indexOf(step);
-                    const isActive = currentIdx >= idx;
+    <div className="min-h-screen bg-gray-50 pb-24 relative">
+        {renderContextBar()}
+
+        <div className="p-4 max-w-2xl mx-auto space-y-6">
+            <div className="pt-2 pb-2">
+                <h2 className="text-2xl font-bold text-slate-900 leading-tight">
+                    오픈에 필요한 작업을<br/>선택해주세요
+                </h2>
+                <p className="text-sm text-gray-500 mt-2">
+                    선택한 항목이 <strong>견적서</strong>와 <strong>일정표</strong>에<br/>자동으로 반영됩니다.
+                </p>
+            </div>
+
+            <div className="space-y-5">
+                {OPEN_TASK_CATEGORIES.map(group => {
+                    const tasks = OPEN_PROCESS_TASKS.filter(t => t.category === group.id);
+                    if (tasks.length === 0) return null;
+
                     return (
-                        <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${isActive ? 'bg-brand-600' : 'bg-gray-200'}`} />
-                    )
+                        <div key={group.id}>
+                            <h3 className="text-sm font-bold text-slate-500 mb-2 px-1 flex items-center gap-2">
+                                {group.label}
+                                <span className="text-[10px] font-normal text-gray-400 bg-white px-2 py-0.5 rounded-full border">
+                                    {group.description}
+                                </span>
+                            </h3>
+                            <div className="grid grid-cols-1 gap-3">
+                                {tasks.map(task => {
+                                    const Icon = getIcon(task.iconType);
+                                    const isSelected = selectedTaskIds.has(task.id);
+                                    const hasDetail = !!taskDetails[task.id];
+
+                                    return (
+                                        <div 
+                                            key={task.id}
+                                            className={`bg-white rounded-xl border-2 transition-all relative overflow-hidden group
+                                                ${isSelected ? 'border-brand-500 bg-brand-50/30' : 'border-transparent shadow-sm'}`}
+                                        >
+                                            <div 
+                                                className="p-4 flex items-center gap-4 cursor-pointer"
+                                                onClick={() => openDetailSheet(task)}
+                                            >
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors
+                                                    ${isSelected ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 text-gray-400'}`}>
+                                                    <Icon size={20} />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`font-bold text-sm ${isSelected ? 'text-slate-900' : 'text-gray-600'}`}>
+                                                            {task.title}
+                                                        </span>
+                                                        {task.isOpeningExclusive && (
+                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">ONLY</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                                                        {task.description}
+                                                        {hasDetail && isSelected && <span className="w-1.5 h-1.5 rounded-full bg-green-500 ml-1" title="설정됨"/>}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }}
+                                                className={`absolute top-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors z-10
+                                                    ${isSelected ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-gray-200 text-transparent hover:border-gray-400'}`}
+                                            >
+                                                <Check size={14} strokeWidth={3} />
+                                            </button>
+                                            
+                                            {isSelected && !hasDetail && (
+                                                <div className="absolute bottom-2 right-4 text-[10px] text-brand-600 font-bold animate-pulse pointer-events-none">
+                                                    터치하여 상세 설정 &gt;
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
                 })}
             </div>
-        )}
+        </div>
 
-        {step === 'INFO' && renderInfoStep()}
-        {step === 'CHECKLIST' && renderChecklistStep()}
-        {step === 'UPLOAD' && renderUploadStep()}
-        {step === 'SCHEDULE' && renderScheduleStep()}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+            <div className="max-w-2xl mx-auto flex items-center gap-4">
+                <div className="flex-1">
+                    <div className="text-xs text-gray-500 font-bold mb-0.5">선택 항목 {selectedTaskIds.size}개</div>
+                    <div className="text-[10px] text-gray-400">견적서 v1이 자동 생성됩니다.</div>
+                </div>
+                <Button 
+                    onClick={handleSubmit} 
+                    disabled={selectedTaskIds.size === 0} 
+                    className="flex-[2] h-12 text-base shadow-brand-200 shadow-lg"
+                >
+                    맞춤 상담 시작하기 <ArrowRight size={18} className="ml-2"/>
+                </Button>
+            </div>
+        </div>
+
+        {renderDetailSheet()}
     </div>
   );
 };
