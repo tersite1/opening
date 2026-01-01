@@ -183,34 +183,61 @@ export interface ConsultingOption {
   isOnline: boolean;
 }
 
-// Opening Process Task (Checklist Item)
-export interface OpenTaskItem {
-  id: string;
-  title: string;
-  description: string;
-  category: 'A' | 'B' | 'C' | 'D' | 'E'; // Stage
-  leadTime: string;
-  isRequired?: boolean;
-  isOpeningExclusive?: boolean; // True for 3D, Package, Consulting
-}
+// --- [Updated] Task Categories ---
+export type TaskCategoryGroup = 'CONSTRUCTION' | 'OPERATION' | 'INFO' | 'OPENING_LITE';
 
 export interface OpenTaskCategory {
-  id: 'A' | 'B' | 'C' | 'D' | 'E';
+  id: TaskCategoryGroup;
   label: string;
   description: string;
 }
 
+// --- [Updated] Task Item Definition ---
+export interface OpenTaskItem {
+  id: string;
+  title: string;
+  description: string;
+  category: TaskCategoryGroup; // Grouping
+  iconType: string; // Icon mapping string
+  leadTime?: string; // Optional if not used everywhere
+  isRequired?: boolean;
+  isOpeningExclusive?: boolean; // Opening exclusive badge
+}
+
+// --- [New] Task Detail Form Data ---
+export interface TaskDetailData {
+  taskId: string;
+  // Common fields
+  startDate?: string;
+  priority?: 'COST' | 'SPEED' | 'QUALITY';
+  note?: string;
+  // Flexible fields
+  [key: string]: any; 
+}
+
+// --- [Updated] Consulting Booking ---
 export interface ConsultingBooking {
   id: string;
-  optionId?: string; 
-  date: string;
-  timeSlot: string;
-  businessType: BusinessType | string;
-  budget: string;
+  // Context Info
+  businessType: string; // Major/Middle/Minor string
+  region?: string;
+  area?: number;
+  budget?: number | string; // Allow string for flexibility or number
+  targetDate?: string;
+  
   status: 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   consultantName: string;
-  typeLabel: string; // e.g., '30분 화상' or '오픈 패키지 상담'
-  selectedTasks?: string[]; // IDs of selected tasks
+  typeLabel: string;
+  
+  // Selection & Details
+  selectedTaskIds: string[];
+  taskDetails?: TaskDetailData[]; // Details per task
+  
+  date: string; // Booking date
+  timeSlot?: string;
+  
+  // Legacy compatibility if needed
+  optionId?: string;
 }
 
 // Category Tree Structure
