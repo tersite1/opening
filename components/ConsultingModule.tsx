@@ -16,10 +16,11 @@ interface ConsultingModuleProps {
     area?: number;
     budget?: number;
   };
+  preSelectedPackageId?: string;
 }
 
 export const ConsultingModule: React.FC<ConsultingModuleProps> = ({ 
-  onComplete, onCancel, initialContext 
+  onComplete, onCancel, initialContext, preSelectedPackageId 
 }) => {
   // --- States ---
   
@@ -34,7 +35,10 @@ export const ConsultingModule: React.FC<ConsultingModuleProps> = ({
   const [isEditingContext, setIsEditingContext] = useState(false);
 
   // 2. Checklist Selection
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  // 패키지를 보고 들어왔다면 '중고 패키지', '컨설팅' 자동 선택
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+    new Set(preSelectedPackageId ? ['used_package', 'consulting'] : [])
+  );
   
   // 3. Task Details (Map taskId -> Data)
   const [taskDetails, setTaskDetails] = useState<Record<string, TaskDetailData>>({});
@@ -79,7 +83,7 @@ export const ConsultingModule: React.FC<ConsultingModuleProps> = ({
       status: 'PENDING',
       consultantName: '배정중',
       typeLabel: '맞춤 오픈 상담',
-      selectedTaskIds: Array.from(selectedTaskIds),
+      selectedTaskIds: Array.from(selectedTaskIds), // [수정] 타입 일치
       taskDetails: Object.values(taskDetails),
       date: new Date().toLocaleDateString(),
     };
@@ -146,7 +150,7 @@ export const ConsultingModule: React.FC<ConsultingModuleProps> = ({
     const task = activeSheetTask;
     const detail = taskDetails[task.id] || {};
     
-    // 항목별 특화 필드 (간소화 버전)
+    // 항목별 특화 필드
     const renderSpecificFields = () => {
         switch(task.id) {
             case 'interior': return (
