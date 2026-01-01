@@ -18,7 +18,7 @@ type ProjectStatus = 'WAITING' | 'REQUESTING_DOCS' | 'DESIGNING' | 'REVIEWING' |
 
 const getStatusLabel = (status: ProjectStatus | string) => {
     switch (status) {
-        case 'PENDING': return '접수 대기'; // bookings의 기본 상태 매핑
+        case 'PENDING': return '접수 대기';
         case 'WAITING': return '대기 (접수완료)';
         case 'REQUESTING_DOCS': return '자료 요청중';
         case 'DESIGNING': return '설계/산출중';
@@ -56,18 +56,16 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
   // Mock Project Data + Real Data Merge
   const projectData = activeBooking ? {
       ...activeBooking,
-      // 상태가 PENDING이면 '자료 요청중'으로 가정 (시나리오상)
       status: activeBooking.status === 'PENDING' ? 'REQUESTING_DOCS' : activeBooking.status, 
       progress: 35, // %
       nextAction: '현장 실측 도면 업로드 필요',
       lastUpdate: new Date().toLocaleDateString(),
-      // [중요] 실제 선택한 태스크 반영
+      // [수정] 실제 선택한 태스크 반영
       tasks: OPEN_PROCESS_TASKS.map(t => ({
           ...t,
-          // 완료 여부는 임의로 설정 (실제로는 DB에 저장된 상태 필요)
           status: 'PENDING', 
-          // ★ 여기가 핵심: 사용자가 선택했는지 여부 확인
-          isSelected: activeBooking.selectedTaskIds?.includes(t.id)
+          // ★ 핵심: 사용자가 실제로 선택한 항목인지 확인
+          isSelected: activeBooking.selectedTaskIds?.includes(t.id) || false
       })),
       files: [
           { name: '사업자등록증', status: 'MISSING' },
@@ -101,7 +99,7 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                  <span className="text-xs text-gray-400">담당: {projectData?.consultantName} 매니저</span>
               </div>
               <h1 className="text-xl font-bold text-slate-900 leading-tight mb-1">
-                  {projectData?.businessType} ({projectData?.area}평)
+                  {projectData?.businessType} ({projectData?.area || '미정'}평)
               </h1>
               <div className="text-xs text-gray-500">
                   {activeBooking?.targetDate ? `${activeBooking.targetDate} 오픈 목표` : '오픈일 미정'} · {activeBooking?.region || '지역 미정'}
@@ -227,6 +225,20 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                                               )}
                                           </div>
                                           <p className="text-xs text-gray-400 mt-0.5">{task.description}</p>
+                                          
+                                          {/* Detailed Settings (Expands when selected) */}
+                                          {task.isSelected && (
+                                              <div className="mt-3 pt-3 border-t border-gray-100 animate-in fade-in slide-in-from-top-1">
+                                                  <div className="flex gap-2 mb-2">
+                                                      <span className="text-xs font-bold text-gray-600">범위:</span>
+                                                      <span className="text-xs text-slate-900 bg-gray-100 px-2 rounded">전체</span>
+                                                      <Settings size={12} className="text-gray-400"/>
+                                                  </div>
+                                                  <div className="text-[10px] text-brand-600 flex items-center gap-1">
+                                                      <RefreshCw size={10} /> 견적 v2에 반영됨
+                                                  </div>
+                                              </div>
+                                          )}
                                       </div>
                                   </div>
                               ))}
@@ -304,7 +316,7 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header Summary */}
       <div className="bg-white p-6 border-b border-gray-100">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">내 프로젝트</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">내 상담</h1>
           
           <div className="flex gap-4 mb-6">
               <div className="flex-1 bg-brand-50 rounded-xl p-4 border border-brand-100">
