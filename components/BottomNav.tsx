@@ -1,6 +1,6 @@
 import React from 'react';
 import { MainTab } from '../types';
-import { Home, ShoppingBag, FileText, MessageSquare, HelpCircle } from 'lucide-react';
+import { Home, ShoppingBag, FileText, MessageSquare, Menu } from 'lucide-react';
 
 interface BottomNavProps {
   currentTab: MainTab;
@@ -12,8 +12,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onTabChange })
     { id: 'HOME', label: '홈', icon: <Home size={22} /> },
     { id: 'LISTINGS', label: '매물', icon: <ShoppingBag size={22} /> },
     { id: 'QUOTE', label: '견적', icon: <FileText size={22} /> },
-    { id: 'FAQ', label: 'FAQ', icon: <HelpCircle size={22} /> },
     { id: 'CONSULTING', label: '내 상담', icon: <MessageSquare size={22} /> },
+    { id: 'MORE', label: '더보기', icon: <Menu size={22} /> },
   ];
 
   return (
