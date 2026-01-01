@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { User, ConsultingBooking, Quote } from '../types';
-import { Button, Card, Badge } from './Components';
+import { User } from '../types';
+import { supabase } from '../utils/supabaseClient'; // Supabase Client 추가
+import { Button, Badge } from './Components';
 import { 
-  User as UserIcon, LogOut, Settings, FileText, HelpCircle, 
+  User as UserIcon, LogOut, FileText, HelpCircle, 
   ShieldAlert, Wrench, Building2, ChevronRight, MessageCircle, 
   Phone, Bell, CreditCard, FileCheck, Search, ChevronDown, 
   AlertTriangle, Clock, Box, RefreshCw
@@ -10,7 +11,7 @@ import {
 
 interface MoreViewProps {
   user: User | null;
-  onLogin: (type: 'KAKAO' | 'PHONE') => void;
+  onLogin: (type: 'KAKAO' | 'PHONE') => void; // App.tsx와의 호환성을 위해 타입 유지 (내부에서 처리하므로 실제로는 사용 안함)
   onLogout: () => void;
   consultingCount: number;
   quoteCount: number;
@@ -30,18 +31,33 @@ const FAQ_CATEGORIES = [
 const FAQ_ITEMS = [
     { id: 1, category: '3D', q: '3D 체험 링크가 안 와요.', a: '3D 인테리어 체험 링크는 작업 완료 후 카카오톡 링크로 발송됩니다. 보통 영업일 기준 3~5일 소요됩니다.' },
     { id: 2, category: 'SCHEDULE', q: '설치 일정이 밀리면 어떻게 하나요?', a: '천재지변이나 건물 측 사유가 아닌 경우, 지연 보상 정책에 따라 보상해 드립니다.' },
-    { id: 'q_fix', category: 'WARRANTY', q: '설치 후 하자가 발견되면요?', a: '인수 확인서 서명 전 발견된 하자는 즉시 교체/수리해 드립니다. 보증 기간 내 발생한 문제는 CS센터로 접수해주세요.' },
+    { id: 3, category: 'WARRANTY', q: '설치 후 하자가 발견되면요?', a: '인수 확인서 서명 전 발견된 하자는 즉시 교체/수리해 드립니다. 보증 기간 내 발생한 문제는 CS센터로 접수해주세요.' },
     { id: 4, category: 'QUOTE', q: '견적에 포함된 범위가 어디까지인가요?', a: '견적서 상세 화면의 [포함 범위] 섹션에서 아이콘으로 구분하여 확인하실 수 있습니다.' },
     { id: 5, category: 'LISTING', q: '홈의 매물과 매물 탭의 차이가 뭔가요?', a: '홈은 타 점주님의 직거래/정리 매물이며, 매물 탭은 오프닝이 직접 검수하고 보증하는 인증 패키지입니다.' },
 ];
 
 export const MoreView: React.FC<MoreViewProps> = ({ 
-    user, onLogin, onLogout, consultingCount, quoteCount 
+    user, onLogout, consultingCount, quoteCount 
 }) => {
   const [viewState, setViewState] = useState<'MENU' | 'FAQ'>('MENU');
   const [faqCategory, setFaqCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+
+  // 실제 로그인 핸들러
+  const handleSupabaseLogin = async (provider: 'kakao' | 'google') => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: provider,
+        options: {
+          redirectTo: window.location.origin, // 로그인 완료 후 돌아올 현재 URL
+        }
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      alert('로그인 중 오류가 발생했습니다: ' + error.message);
+    }
+  };
 
   // --- Sub-View: FAQ Section ---
   const renderFAQ = () => {
@@ -166,7 +182,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
                           </div>
                           <div>
                               <div className="font-bold text-lg">{user.name} 사장님</div>
-                              <div className="text-xs text-slate-400">{user.phone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-****-$3')}</div>
+                              <div className="text-xs text-slate-400">{user.phone}</div>
                           </div>
                       </div>
                       <button className="text-xs text-slate-400 border border-slate-600 px-2 py-1 rounded hover:bg-slate-800">
@@ -201,13 +217,13 @@ export const MoreView: React.FC<MoreViewProps> = ({
                   </p>
                   <div className="space-y-2">
                       <button 
-                        onClick={() => onLogin('KAKAO')}
+                        onClick={() => handleSupabaseLogin('kakao')}
                         className="w-full bg-[#FEE500] text-[#000000] h-11 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
                       >
                           <MessageCircle size={18} fill="black" className="border-none" /> 카카오로 3초만에 시작
                       </button>
                       <button 
-                         onClick={() => onLogin('PHONE')}
+                         onClick={() => alert("휴대폰 로그인은 준비 중입니다.")}
                          className="w-full bg-white border border-gray-300 text-slate-700 h-11 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
                       >
                           <Phone size={16} /> 휴대폰 번호로 시작
