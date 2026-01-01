@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ConsultingBooking, OpenTaskItem, BusinessType } from '../types';
 import { OPEN_PROCESS_TASKS, OPEN_TASK_CATEGORIES } from '../constants';
+import { uploadConsultingFile } from '../utils/api'; // API import
 import { Card, Badge, Button, Input } from './Components';
 import { 
   ChevronRight, Calendar, Clock, MapPin, CheckCircle, AlertCircle, 
   FileText, MessageSquare, UploadCloud, ChevronDown, MoreHorizontal,
-  Layout, ListTodo, FolderOpen, ArrowRight, X, Phone, Settings, RefreshCw, Box
+  Layout, ListTodo, FolderOpen, ArrowRight, X, Phone, Settings, RefreshCw, Box, Loader2
 } from 'lucide-react';
 
 interface MyConsultationsViewProps {
@@ -34,7 +35,7 @@ const getStatusColor = (status: ProjectStatus | string) => {
     switch (status) {
         case 'PENDING': return 'gray';
         case 'WAITING': return 'gray';
-        case 'REQUESTING_DOCS': return 'red'; // Action needed
+        case 'REQUESTING_DOCS': return 'red';
         case 'DESIGNING': return 'blue';
         case 'REVIEWING': return 'yellow';
         case 'CONFIRMED': return 'green';
@@ -46,9 +47,11 @@ const getStatusColor = (status: ProjectStatus | string) => {
 
 export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookings, onBookConsulting }) => {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
-  
-  // Detail View Tabs
   const [detailTab, setDetailTab] = useState<'DASHBOARD' | 'CHECKLIST' | 'TIMELINE' | 'FILES'>('DASHBOARD');
+  
+  // File Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // --- Data Enrichment ---
   const activeBooking = bookings.find(b => b.id === selectedBookingId);
@@ -57,27 +60,51 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
   const projectData = activeBooking ? {
       ...activeBooking,
       status: activeBooking.status === 'PENDING' ? 'REQUESTING_DOCS' : activeBooking.status, 
-      progress: 35, // %
+      progress: 35, 
       nextAction: '현장 실측 도면 업로드 필요',
       lastUpdate: new Date().toLocaleDateString(),
-      // [수정] 실제 선택한 태스크 반영
       tasks: OPEN_PROCESS_TASKS.map(t => ({
           ...t,
           status: 'PENDING', 
-          // ★ 핵심: 사용자가 실제로 선택한 항목인지 확인
           isSelected: activeBooking.selectedTaskIds?.includes(t.id) || false
       })),
-      files: [
-          { name: '사업자등록증', status: 'MISSING' },
-          { name: '현장 사진 (출입구)', status: 'MISSING' },
-          { name: '현장 사진 (내부)', status: 'MISSING' }
-      ]
+      // [수정] DB에서 불러온 files가 있으면 그것을 쓰고, 없으면 빈 배열 (any 타입 캐스팅으로 임시 해결)
+      files: (activeBooking as any).files || [] 
   } : null;
 
   // --- Handlers ---
   const handleTaskToggle = (taskId: string) => {
       console.log('Toggle task (Read Only in MVP):', taskId);
   };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !selectedBookingId) return;
+
+      if (file.size > 10 * 1024 * 1024) {
+          alert("파일 크기는 10MB 이하여야 합니다.");
+          return;
+      }
+
+      setIsUploading(true);
+      try {
+          await uploadConsultingFile(selectedBookingId, file);
+          alert("파일이 성공적으로 업로드되었습니다. (새로고침 시 반영)");
+          // 실제로는 여기서 부모 컴포넌트의 데이터를 리로드(Refetch)해주는 것이 좋습니다.
+          // 현재 구조상으로는 알림만 띄웁니다.
+      } catch (error: any) {
+          console.error(error);
+          alert("업로드 실패: " + error.message);
+      } finally {
+          setIsUploading(false);
+          // Input 초기화
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+  };
+
+  const triggerFileInput = () => {
+      fileInputRef.current?.click();
+  }
 
   // --- Render Sub-Components ---
 
@@ -88,7 +115,9 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                   <ChevronRight className="rotate-180" />
               </button>
               <div className="flex gap-2">
-                  <button className="p-2 text-gray-500 hover:text-brand-600"><UploadCloud size={20}/></button>
+                  <button className="p-2 text-gray-500 hover:text-brand-600" onClick={triggerFileInput} disabled={isUploading}>
+                      {isUploading ? <Loader2 size={20} className="animate-spin"/> : <UploadCloud size={20}/>}
+                  </button>
                   <button className="p-2 text-gray-500 hover:text-brand-600"><MessageSquare size={20}/></button>
               </div>
           </div>
@@ -106,10 +135,9 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
               </div>
           </div>
 
-          {/* Quick Actions */}
           <div className="grid grid-cols-3 gap-2 mb-2">
               <Button size="sm" variant="outline" className="text-xs h-9" onClick={() => setDetailTab('FILES')}>
-                  <UploadCloud size={14} className="mr-1.5"/> 자료 업로드
+                  <UploadCloud size={14} className="mr-1.5"/> 자료 확인
               </Button>
               <Button size="sm" variant="outline" className="text-xs h-9" onClick={() => setDetailTab('CHECKLIST')}>
                   <ListTodo size={14} className="mr-1.5"/> 체크 확인
@@ -119,7 +147,6 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
               </Button>
           </div>
 
-          {/* Tabs */}
           <div className="flex border-b border-gray-100 -mb-4 mt-4">
               {[
                   { id: 'DASHBOARD', label: '대시보드' },
@@ -142,7 +169,6 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
 
   const renderDashboardTab = () => (
       <div className="p-4 space-y-6 bg-gray-50 min-h-screen pb-20">
-          {/* Notification Block */}
           <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 flex items-start gap-3">
               <AlertCircle className="text-brand-600 shrink-0 mt-0.5" size={20} />
               <div>
@@ -159,7 +185,6 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
               </div>
           </div>
 
-          {/* Summary Status */}
           <div className="grid grid-cols-2 gap-3">
                <div className="bg-white p-4 rounded-xl border border-gray-200">
                    <div className="text-xs text-gray-500 mb-1">총 예산 (예상)</div>
@@ -173,7 +198,6 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                </div>
           </div>
 
-          {/* Selected Services Summary */}
           <div>
               <h3 className="font-bold text-slate-900 mb-3 text-sm">선택한 서비스 현황</h3>
               <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
@@ -226,7 +250,6 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                                           </div>
                                           <p className="text-xs text-gray-400 mt-0.5">{task.description}</p>
                                           
-                                          {/* Detailed Settings (Expands when selected) */}
                                           {task.isSelected && (
                                               <div className="mt-3 pt-3 border-t border-gray-100 animate-in fade-in slide-in-from-top-1">
                                                   <div className="flex gap-2 mb-2">
@@ -258,22 +281,40 @@ export const MyConsultationsView: React.FC<MyConsultationsViewProps> = ({ bookin
                </div>
                <h3 className="font-bold text-slate-900 mb-1">자료 업로드</h3>
                <p className="text-xs text-gray-500 mb-4">도면, 현장 사진, 사업자등록증 등을 올려주세요.</p>
-               <Button fullWidth variant="outline">파일 선택하기</Button>
+               
+               {/* Hidden Input */}
+               <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileUpload} 
+                  className="hidden" 
+                  accept="image/*,.pdf"
+               />
+               
+               <Button fullWidth variant="outline" onClick={triggerFileInput} disabled={isUploading}>
+                   {isUploading ? '업로드 중...' : '파일 선택하기'}
+               </Button>
           </div>
 
           <h3 className="font-bold text-slate-900 text-sm mb-3 px-1">제출 목록</h3>
           <div className="space-y-3">
-              {projectData?.files.map((file, idx) => (
-                  <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                          <div className={`w-2 h-2 rounded-full ${file.status === 'UPLOADED' ? 'bg-green-500' : 'bg-red-500'}`} />
-                          <span className="text-sm font-medium text-gray-700">{file.name}</span>
+              {projectData?.files && projectData.files.length > 0 ? (
+                  projectData.files.map((file: any, idx: number) => (
+                      <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${file.status === 'UPLOADED' ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <a href={file.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-gray-700 truncate hover:underline hover:text-brand-600">
+                                  {file.name}
+                              </a>
+                          </div>
+                          <Badge color={file.status === 'UPLOADED' ? 'green' : 'red'}>
+                              {file.status === 'UPLOADED' ? '완료' : '미제출'}
+                          </Badge>
                       </div>
-                      <Badge color={file.status === 'UPLOADED' ? 'green' : 'red'}>
-                          {file.status === 'UPLOADED' ? '완료' : '미제출'}
-                      </Badge>
-                  </div>
-              ))}
+                  ))
+              ) : (
+                  <div className="text-center text-xs text-gray-400 py-4">아직 제출된 자료가 없습니다.</div>
+              )}
           </div>
       </div>
   );
