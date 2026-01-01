@@ -96,22 +96,65 @@ function App() {
     setAppMode('PLANNER');
   };
 
+  // [수정됨] 상세 견적 데이터 생성 로직 업데이트
   const handlePlannerNext = () => {
     if (selectedPackage) {
       const itemsCost = selectedPackage.totalPrice; 
-      const total = itemsCost + LOGISTICS_BASE_COST + INSTALLATION_BASE_COST;
-      const vat = total * 0.1;
+      const logisticsCost = LOGISTICS_BASE_COST;
+      const installationCost = INSTALLATION_BASE_COST;
+      const optionsCost = 0; // 초기 옵션 없음
+      const discountAmount = 0;
       
+      const subTotal = itemsCost + logisticsCost + installationCost + optionsCost - discountAmount;
+      const vat = subTotal * 0.1;
+      const total = subTotal + vat;
+      
+      const today = new Date();
+      const validUntil = new Date(today);
+      validUntil.setDate(today.getDate() + 7); // 7일 유효
+
       const newQuote: Quote = {
-        id: `QT-${Date.now()}`,
+        id: `QT-${Date.now().toString().slice(-6)}`,
         packageId: selectedPackage.id,
+        packageName: selectedPackage.name,
+        
         itemsCost,
-        logisticsCost: LOGISTICS_BASE_COST,
-        installationCost: INSTALLATION_BASE_COST,
+        logisticsCost,
+        installationCost,
+        optionsCost,
+        discountAmount,
         vat,
-        totalCost: total + vat,
-        deposit: (total + vat) * 0.1,
-        date: new Date().toLocaleDateString(),
+        totalCost: total,
+        deposit: total * 0.1,
+        
+        date: today.toLocaleDateString(),
+        validUntil: validUntil.toLocaleDateString(),
+        status: 'DRAFT',
+        version: 1,
+
+        // Mock Data for Detail View
+        scope: [
+            { category: '기본 제공', items: ['선택 패키지 가구/집기 일체', '전문 물류 배송 (1톤 트럭)', '현장 설치 및 배치', '설치 후 기본 청소'], isIncluded: true },
+            { category: '고객 부담(미포함)', items: ['엘리베이터 사용료', '전기 증설 공사', '기존 집기 철거/폐기', '사다리차 비용'], isIncluded: false }
+        ],
+        timeline: [
+            { stage: '계약 확정', duration: '즉시', description: '예약금 입금 확인', status: 'PENDING' },
+            { stage: '물류 배차', duration: 'D+2', description: '차량 및 설치팀 배정', status: 'PENDING' },
+            { stage: '현장 설치', duration: 'D+5', description: '반입 및 조립 설치', status: 'PENDING' },
+            { stage: '검수/인수', duration: 'D+5', description: '최종 확인 및 잔금 결제', status: 'PENDING' }
+        ],
+        requirements: [
+            '설치 공간 비워두기',
+            '엘리베이터 사용 승인 (관리실)',
+            '주차 공간 확보 (1대)',
+            '전기 콘센트 위치 확인'
+        ],
+        
+        grade: selectedPackage.grade || 'A',
+        warrantyPeriod: selectedPackage.warranty || '14일',
+        
+        has3D: selectedPackage.has3D,
+        is3DLinkSent: false,
         consultingIncluded: false
       };
       
@@ -142,6 +185,7 @@ function App() {
     );
   }
 
+  // ModalWrapper
   const ModalWrapper: React.FC<{ children: React.ReactNode, title: string, onClose: () => void, maxWidth?: string }> = ({ children, title, onClose, maxWidth = 'max-w-xl' }) => (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
