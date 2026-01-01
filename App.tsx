@@ -13,6 +13,7 @@ import {
   LOGISTICS_BASE_COST,
   INSTALLATION_BASE_COST
 } from './constants';
+import { supabase } from './utils/supabaseClient'; // Supabase Client 추가
 import { Planner2D } from './components/Planner2D';
 import { ConsultingModule } from './components/ConsultingModule';
 import { validateLayout } from './utils/plannerUtils';
@@ -32,7 +33,7 @@ function App() {
 
   // Navigation State
   const [currentTab, setCurrentTab] = useState<MainTab>('HOME');
-  const [appMode, setAppMode] = useState<AppStep>('TAB_VIEW'); // Handles overlay modes like Planner
+  const [appMode, setAppMode] = useState<AppStep>('TAB_VIEW'); 
 
   // Data State
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
@@ -40,7 +41,7 @@ function App() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [savedQuotes, setSavedQuotes] = useState<Quote[]>([]); 
   
-  // User State (New)
+  // User State
   const [user, setUser] = useState<User | null>(null);
 
   // Planner State
@@ -49,32 +50,49 @@ function App() {
   });
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
 
-  // Simulate Loading
+  // 1. 초기 로딩 및 Supabase Auth 상태 감지
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // 세션 체크 (새로고침 시 로그인 유지)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || '사장님',
+          phone: session.user.email || '', 
+          type: 'KAKAO', // provider 정보는 session에서 확인 가능하나 일단 고정
+          joinedDate: new Date(session.user.created_at).toLocaleDateString()
+        });
+      }
+      setIsLoading(false); // 로딩 끝
+    });
+
+    // 로그인/로그아웃 이벤트 리스너
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || '사장님',
+          phone: session.user.email || '',
+          type: 'KAKAO',
+          joinedDate: new Date(session.user.created_at).toLocaleDateString()
+        });
+      } else {
+        setUser(null);
+      }
       setIsLoading(false);
-    }, 2500); 
-    return () => clearTimeout(timer);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // --- Actions ---
-
-  // Login Handlers
-  const handleLogin = (type: 'KAKAO' | 'PHONE') => {
-      // Mock Login Logic
-      setUser({
-          id: 'u_12345',
-          name: '김오픈',
-          phone: '01012345678',
-          type,
-          joinedDate: '2024-01-01'
-      });
-  };
-
-  const handleLogout = () => {
+  // 2. 로그아웃 핸들러
+  const handleLogout = async () => {
+      await supabase.auth.signOut();
       setUser(null);
-      setCurrentTab('HOME'); // Go back to home after logout
+      setCurrentTab('HOME'); 
   };
+
+  // --- Actions ---
 
   const startPlannerFlow = (pkg: Package) => {
     setSelectedPackage(pkg);
@@ -122,7 +140,7 @@ function App() {
       const itemsCost = selectedPackage.totalPrice; 
       const logisticsCost = LOGISTICS_BASE_COST;
       const installationCost = INSTALLATION_BASE_COST;
-      const optionsCost = 0; // 초기 옵션 없음
+      const optionsCost = 0; 
       const discountAmount = 0;
       
       const subTotal = itemsCost + logisticsCost + installationCost + optionsCost - discountAmount;
@@ -131,7 +149,7 @@ function App() {
       
       const today = new Date();
       const validUntil = new Date(today);
-      validUntil.setDate(today.getDate() + 7); // 7일 유효
+      validUntil.setDate(today.getDate() + 7); 
 
       const newQuote: Quote = {
         id: `QT-${Date.now().toString().slice(-6)}`,
@@ -152,7 +170,6 @@ function App() {
         status: 'DRAFT',
         version: 1,
 
-        // Mock Data for Detail View
         scope: [
             { category: '기본 제공', items: ['선택 패키지 가구/집기 일체', '전문 물류 배송 (1톤 트럭)', '현장 설치 및 배치', '설치 후 기본 청소'], isIncluded: true },
             { category: '고객 부담(미포함)', items: ['엘리베이터 사용료', '전기 증설 공사', '기존 집기 철거/폐기', '사다리차 비용'], isIncluded: false }
@@ -373,7 +390,7 @@ function App() {
             {currentTab === 'MORE' && (
                 <MoreView 
                     user={user}
-                    onLogin={handleLogin}
+                    onLogin={() => { /* Handled inside MoreView */ }}
                     onLogout={handleLogout}
                     consultingCount={consultingBookings.filter(b => b.status === 'IN_PROGRESS').length}
                     quoteCount={savedQuotes.length}
