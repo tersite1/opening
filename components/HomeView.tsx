@@ -1,19 +1,41 @@
 import React, { useState } from 'react';
-import { Package, CategoryNode, BusinessType } from '../types';
+import { Package, CategoryNode, ConsultingBooking } from '../types';
 import { CATEGORY_TREE, MOCK_USER_LISTINGS } from '../constants';
-import { Card, Badge, Button } from './Components';
-import { Search, Bell, User, Clock, Heart, ChevronRight, RotateCcw, MapPin, Calendar, Tag } from 'lucide-react';
+import { Card, Button } from './Components';
+import { 
+  Search, Bell, User, Clock, Heart, ChevronRight, RotateCcw, 
+  MapPin, Calendar, Tag, ShieldCheck, Box, MessageCircle, FileText,
+  Check, SlidersHorizontal, ChevronDown
+} from 'lucide-react';
 
 interface HomeViewProps {
   onPackageSelect: (pkg: Package) => void;
   onConsultingClick: (pkg?: Package) => void;
+  consultingBookings?: ConsultingBooking[];
+  onNavigateToConsulting?: () => void;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultingClick }) => {
+export const HomeView: React.FC<HomeViewProps> = ({ 
+    onPackageSelect, 
+    onConsultingClick, 
+    consultingBookings = [],
+    onNavigateToConsulting 
+}) => {
   const [selectedMajor, setSelectedMajor] = useState<CategoryNode | null>(null);
   const [selectedMiddle, setSelectedMiddle] = useState<CategoryNode | null>(null);
   const [selectedMinor, setSelectedMinor] = useState<CategoryNode | null>(null);
   const [activeTab, setActiveTab] = useState('오늘 올라온');
+  
+  // Detail Modal State
+  const [selectedPackageDetail, setSelectedPackageDetail] = useState<Package | null>(null);
+  
+  // Wishlist & Compare State (Mock)
+  const [wishlist, setWishlist] = useState<Set<string>>(new Set());
+  const [compareList, setCompareList] = useState<Set<string>>(new Set());
+
+  // Count active consultations
+  const activeConsultations = consultingBookings.filter(b => b.status === 'IN_PROGRESS' || b.status === 'PENDING').length;
+  const totalConsultations = consultingBookings.length;
 
   // Home specific tabs
   const HOME_TABS = [
@@ -24,6 +46,15 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
       { id: 'franchise', label: '프랜차이즈' },
       { id: 'cheap', label: '초저가 급처' },
       { id: 'large', label: '대형 평수' }
+  ];
+
+  // Quick Filters (Visual only for MVP)
+  const QUICK_FILTERS = [
+      { label: '예산 범위', icon: <ChevronDown size={12}/> },
+      { label: '면적', icon: <ChevronDown size={12}/> },
+      { label: '지역', icon: <ChevronDown size={12}/> },
+      { label: '7일 설치', icon: null },
+      { label: '3D 체험', icon: null },
   ];
 
   const resetSelection = () => {
@@ -60,20 +91,178 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
       }
   };
 
+  const toggleWishlist = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(wishlist);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setWishlist(next);
+  };
+
+  const toggleCompare = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const next = new Set(compareList);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setCompareList(next);
+  }
+
   // Filter Logic for User Listings
   const filteredListings = MOCK_USER_LISTINGS.filter(pkg => {
-    // 1. Category Filter (If selected)
-    // For MVP, simple filtering can be added here if needed, 
-    // but the tabs are the main navigation.
-
-    // 2. Tab Filter
     const activeTabId = HOME_TABS.find(t => t.label === activeTab)?.id;
     if (activeTabId && pkg.tags) {
         if (!pkg.tags.includes(activeTabId)) return false;
     }
-
     return true;
   });
+
+  const handle3DAction = (pkg: Package) => {
+    if (pkg.has3D) {
+        alert("카카오톡으로 3D 체험 링크가 발송됩니다.");
+    } else {
+        // Request 3D
+        alert("3D 시안 요청이 접수되었습니다. 완료 후 카카오톡으로 안내드립니다.");
+    }
+  }
+
+  // Render Detail Modal (Reused logic from ListingsView)
+  const renderDetailView = () => {
+    if (!selectedPackageDetail) return null;
+    const pkg = selectedPackageDetail;
+    const breakdown = [
+        { label: '집기/가구', cost: pkg.totalPrice - 500000 },
+        { label: '전문 물류', cost: 200000 },
+        { label: '현장 설치', cost: 300000 },
+    ];
+
+    return (
+        <div className="fixed inset-0 z-[60] bg-white overflow-y-auto animate-in slide-in-from-right duration-300">
+            {/* Header */}
+            <div className="sticky top-0 bg-white/95 backdrop-blur border-b z-10 px-4 h-14 flex items-center gap-3">
+                <button onClick={() => setSelectedPackageDetail(null)} className="p-1 -ml-1 hover:bg-gray-100 rounded-full"><ChevronRight className="rotate-180" /></button>
+                <span className="font-bold text-lg truncate flex-1">{pkg.name}</span>
+                <button onClick={(e) => toggleWishlist(pkg.id, e)} className="p-2">
+                    <Heart size={20} fill={wishlist.has(pkg.id) ? "currentColor" : "none"} className={wishlist.has(pkg.id) ? "text-red-500" : "text-gray-400"} />
+                </button>
+            </div>
+
+            <div className="p-0 pb-24">
+                {/* Image & Main Info */}
+                <div className="aspect-video relative bg-gray-100">
+                     <img src={pkg.image} className="w-full h-full object-cover" alt={pkg.name} />
+                     <div className="absolute bottom-4 left-4 flex gap-1">
+                        <span className="px-2 py-1 bg-brand-600 text-white text-[10px] font-bold rounded flex items-center gap-1 shadow-sm border border-brand-500">
+                             <ShieldCheck size={10} /> 오프닝 검수
+                        </span>
+                        {pkg.badges.filter(b => b !== '오프닝 검수').map(b => (
+                             <span key={b} className="px-2 py-1 bg-white/90 backdrop-blur text-brand-700 text-[10px] font-bold rounded shadow-sm">
+                                 {b}
+                             </span>
+                        ))}
+                     </div>
+                </div>
+
+                <div className="p-5 border-b border-gray-100">
+                     <div className="flex justify-between items-start mb-2">
+                         <span className="text-sm font-bold text-brand-600">{pkg.businessType} · {pkg.location}</span>
+                         <span className="text-xs text-gray-400">{pkg.leadTimeDays}일 소요</span>
+                     </div>
+                     <h1 className="text-2xl font-bold text-slate-900 leading-snug mb-4">{pkg.name}</h1>
+                     <p className="text-sm text-gray-600 leading-relaxed mb-6">{pkg.description}</p>
+                     
+                     {/* Cost */}
+                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                         <div className="flex justify-between items-center mb-3 border-b border-slate-200 pb-3">
+                             <span className="text-sm font-bold text-slate-600">총 견적 (VAT 별도)</span>
+                             <span className="text-2xl font-black text-slate-900">{pkg.totalPrice.toLocaleString()}원</span>
+                         </div>
+                         <div className="space-y-1">
+                             {breakdown.map((b, i) => (
+                                 <div key={i} className="flex justify-between text-xs text-gray-500">
+                                     <span>{b.label}</span>
+                                     <span>{b.cost.toLocaleString()}원</span>
+                                 </div>
+                             ))}
+                         </div>
+                     </div>
+                </div>
+
+                {/* Items */}
+                <div className="p-5 border-b border-gray-100">
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Box size={18} /> 정리 품목 리스트 ({pkg.items.length > 0 ? pkg.items.length : '다수'}종)
+                    </h3>
+                    {pkg.items.length > 0 ? (
+                        <div className="space-y-3">
+                            {pkg.items.map((item, idx) => (
+                                <div key={idx} className="flex gap-3 items-center bg-white border border-gray-100 p-2 rounded-lg">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden shrink-0">
+                                        {item.image && <img src={item.image} className="w-full h-full object-cover" alt={item.name} />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-bold truncate">{item.name}</div>
+                                        <div className="text-xs text-gray-500 flex gap-2">
+                                            <span>{item.width}x{item.depth}cm</span>
+                                            <span className="text-brand-600 font-bold">{item.grade}급</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500 p-4 bg-gray-50 rounded-lg text-center">
+                            상세 품목 리스트는 상담 시 제공됩니다.
+                        </div>
+                    )}
+                </div>
+
+                {/* 3D Action */}
+                <div className="p-5">
+                     <div 
+                        onClick={() => handle3DAction(pkg)}
+                        className="bg-slate-900 rounded-xl p-5 text-white relative overflow-hidden cursor-pointer"
+                    >
+                         <div className="relative z-10">
+                             <div className="flex items-center gap-2 mb-2 text-yellow-400 font-bold text-sm">
+                                 {pkg.has3D ? <Box size={16}/> : <RotateCcw size={16}/>}
+                                 {pkg.has3D ? '3D 체험 링크 있음' : '3D 시안 요청 가능'}
+                             </div>
+                             <h3 className="font-bold text-lg mb-1">
+                                 {pkg.has3D ? '지금 바로 배치 체험하기' : '내 공간에 맞게 배치해보기'}
+                             </h3>
+                             <p className="text-xs text-slate-400">
+                                 {pkg.has3D ? '브라우저에서 바로 열립니다.' : '치수 입력 후 시안을 받아보세요.'}
+                             </p>
+                         </div>
+                         <div className="absolute right-[-20px] bottom-[-20px] opacity-20 rotate-12">
+                             <Box size={100} />
+                         </div>
+                     </div>
+                     <p className="text-[10px] text-gray-400 mt-2 text-center">
+                         * 3D 인테리어 체험 링크는 작업 완료 후 카카오톡으로 발송됩니다.
+                     </p>
+                </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex gap-3 z-50">
+                <Button 
+                    variant="outline" 
+                    className="flex-1 border-gray-300" 
+                    onClick={() => { setSelectedPackageDetail(null); onConsultingClick(pkg); }}
+                >
+                    <MessageCircle size={18} className="mr-2" /> 패키지 없이 상담
+                </Button>
+                <Button 
+                    className="flex-[2]"
+                    onClick={() => { setSelectedPackageDetail(null); onPackageSelect(pkg); }}
+                >
+                    <FileText size={18} className="mr-2" /> 견적 생성하기
+                </Button>
+            </div>
+        </div>
+    );
+  };
 
   return (
     <div className="pb-24 bg-white min-h-screen">
@@ -98,23 +287,26 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
                 </div>
             </div>
 
-            {/* Status Summary Banner (Conditional) */}
-            <div className="bg-brand-50 px-4 py-2 flex items-center justify-between text-xs border-t border-brand-100 cursor-pointer hover:bg-brand-100 transition-colors">
+            {/* Status Summary Banner */}
+            <div 
+                onClick={onNavigateToConsulting}
+                className="bg-brand-50 px-4 py-2 flex items-center justify-between text-xs border-t border-brand-100 cursor-pointer hover:bg-brand-100 transition-colors"
+            >
                  <div className="flex gap-4">
-                     <span className="font-bold text-brand-700">진행중 1건</span>
+                     <span className={`font-bold ${activeConsultations > 0 ? 'text-brand-700' : 'text-gray-400'}`}>
+                         진행중 {activeConsultations}건
+                     </span>
                      <span className="w-px h-3 bg-brand-200 my-auto"></span>
-                     <span className="font-bold text-brand-700">내 상담 1건</span>
+                     <span className="font-bold text-brand-700">내 상담 {totalConsultations}건</span>
                  </div>
                  <ChevronRight size={14} className="text-brand-400" />
             </div>
         </div>
       </header>
 
-      {/* 2. Category Tree Selection (Icon Grid) */}
+      {/* 2. Category Tree Selection */}
       <section className="bg-white border-b border-gray-100 pt-4 pb-4">
         <div className="max-w-7xl mx-auto">
-            
-            {/* Level 1: Major (Icon Grid) */}
             <div className="px-4 grid grid-cols-5 gap-y-4 gap-x-2 mb-2">
                 {CATEGORY_TREE.map(cat => {
                     const Icon = cat.icon;
@@ -141,11 +333,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
                 })}
             </div>
 
-            {/* Level 2: Middle (Chips - Expanded) */}
             {selectedMajor && (
                 <div className="mt-2 px-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative shadow-inner">
-                         {/* Close/Reset Button inside panel */}
                         <div className="absolute top-2 right-2">
                             <button onClick={resetSelection} className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-200 rounded-full transition-colors">
                                 <RotateCcw size={14} />
@@ -174,7 +364,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
                 </div>
             )}
 
-            {/* Level 3: Minor (Chips) */}
             {selectedMiddle && selectedMiddle.children && selectedMiddle.children.length > 0 && (
                 <div className="px-4 pt-3 animate-in fade-in slide-in-from-top-1 duration-200">
                     <div className="flex flex-wrap gap-2">
@@ -196,8 +385,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
         </div>
       </section>
 
-      {/* 3. Recommended Listings Tabs */}
+      {/* 3. Recommended Listings Tabs & Filters */}
       <div className="sticky top-14 z-30 bg-white border-b border-gray-100 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+         {/* Tabs */}
          <div className="max-w-7xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar items-center">
             {HOME_TABS.map(tab => (
                  <button 
@@ -212,11 +402,23 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
                  </button>
             ))}
          </div>
+         {/* Quick Filter Chips (New) */}
+         <div className="max-w-7xl mx-auto px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar items-center">
+             <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-xs font-bold text-gray-600 hover:bg-gray-100 whitespace-nowrap">
+                 <SlidersHorizontal size={12} /> 필터
+             </button>
+             <div className="w-px h-3 bg-gray-200 mx-1 shrink-0" />
+             {QUICK_FILTERS.map((f, i) => (
+                 <button key={i} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:border-brand-300 whitespace-nowrap transition-colors">
+                     {f.label}
+                     {f.icon}
+                 </button>
+             ))}
+         </div>
       </div>
 
       {/* 4. Feed (User Listings) */}
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Header */}
         <div className="flex items-end justify-between">
             <div>
                 <h2 className="text-xl font-bold text-slate-900">
@@ -228,7 +430,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
             </div>
         </div>
 
-        {/* Listing Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredListings.length === 0 ? (
                 <div className="col-span-full py-20 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
@@ -239,88 +440,99 @@ export const HomeView: React.FC<HomeViewProps> = ({ onPackageSelect, onConsultin
                     <p className="text-gray-400 text-sm">다른 탭을 선택해보세요.</p>
                 </div>
             ) : (
-                filteredListings.map(pkg => (
-                    <Card key={pkg.id} className="overflow-hidden border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex flex-col h-full cursor-pointer">
-                        {/* Image Area */}
-                        <div className="aspect-[4/3] relative bg-gray-100 overflow-hidden">
-                            <img 
-                                src={pkg.image}
-                                alt={pkg.name} 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            />
-                            {/* Overlay Badges */}
-                            <div className="absolute top-3 left-3 flex flex-col gap-1 items-start">
-                                <span className="px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded flex items-center gap-1">
-                                    <Tag size={10} /> 정리/양도
-                                </span>
-                                {pkg.deadline && (
-                                    <span className="px-2 py-1 bg-red-600 text-white text-[10px] font-bold rounded flex items-center gap-1 animate-pulse">
-                                        <Clock size={10} /> 마감 {pkg.deadline}
+                filteredListings.map(pkg => {
+                    const isCompared = compareList.has(pkg.id);
+                    return (
+                        <Card key={pkg.id} onClick={() => setSelectedPackageDetail(pkg)} className="overflow-hidden border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex flex-col h-full cursor-pointer">
+                            {/* Image Area */}
+                            <div className="aspect-[4/3] relative bg-gray-100 overflow-hidden">
+                                <img 
+                                    src={pkg.image}
+                                    alt={pkg.name} 
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                                <div className="absolute top-3 left-3 flex flex-col gap-1 items-start">
+                                    <span className="px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded flex items-center gap-1">
+                                        <Tag size={10} /> 정리/양도
                                     </span>
-                                )}
-                            </div>
-                            {/* Bookmark */}
-                            <button className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur rounded-full text-gray-400 hover:text-red-500 transition-colors shadow-sm hover:scale-110 active:scale-95">
-                                <Heart size={18} />
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="p-4 flex flex-col flex-1" onClick={() => onConsultingClick(pkg)}>
-                            {/* Title */}
-                            <div className="mb-3">
-                                <div className="text-xs font-bold text-slate-500 mb-0.5">{pkg.businessType}</div>
-                                <h3 className="text-base font-bold text-slate-900 leading-snug line-clamp-2">{pkg.name}</h3>
-                            </div>
-
-                            {/* Info Rows */}
-                            <div className="flex flex-col gap-2 text-xs text-gray-500 mb-4 pb-4 border-b border-gray-100">
-                                <div className="flex items-center gap-2">
-                                    <MapPin size={12} className="text-gray-400"/>
-                                    <span>{pkg.location}</span>
+                                    {pkg.deadline && (
+                                        <span className="px-2 py-1 bg-red-600 text-white text-[10px] font-bold rounded flex items-center gap-1 animate-pulse">
+                                            <Clock size={10} /> 마감 {pkg.deadline}
+                                        </span>
+                                    )}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Calendar size={12} className="text-gray-400"/>
-                                    <span className="font-bold text-red-500">회수 마감: {pkg.deadline}</span>
-                                </div>
-                                <p className="text-gray-400 mt-1 line-clamp-1">{pkg.description}</p>
+                                <button onClick={(e) => toggleWishlist(pkg.id, e)} className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur rounded-full text-gray-400 hover:text-red-500 transition-colors shadow-sm hover:scale-110 active:scale-95">
+                                    <Heart size={18} fill={wishlist.has(pkg.id) ? "currentColor" : "none"} className={wishlist.has(pkg.id) ? "text-red-500" : ""} />
+                                </button>
                             </div>
 
-                            {/* Trust Badges */}
-                            <div className="flex gap-1.5 flex-wrap mb-4">
-                                {pkg.badges.map((b, i) => (
-                                    <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-medium rounded border border-gray-200">
-                                        {b}
-                                    </span>
-                                ))}
-                            </div>
-
-                            <div className="mt-auto">
-                                {/* Price */}
+                            {/* Content */}
+                            <div className="p-4 flex flex-col flex-1">
                                 <div className="mb-3">
-                                    <span className="text-[10px] text-gray-400 block mb-0.5">희망가 (협의가능)</span>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-xl font-black text-slate-900">{pkg.hopePrice?.toLocaleString()}</span>
-                                        <span className="text-sm font-bold text-slate-900">원</span>
-                                    </div>
+                                    <div className="text-xs font-bold text-slate-500 mb-0.5">{pkg.businessType}</div>
+                                    <h3 className="text-base font-bold text-slate-900 leading-snug line-clamp-2">{pkg.name}</h3>
                                 </div>
 
-                                {/* CTAs */}
-                                <Button 
-                                    fullWidth
-                                    variant="primary"
-                                    onClick={(e) => { e.stopPropagation(); onConsultingClick(pkg); }}
-                                    className="h-10 text-sm shadow-none bg-slate-800 hover:bg-slate-700"
-                                >
-                                    패키지 없이 상담
-                                </Button>
+                                <div className="flex flex-col gap-2 text-xs text-gray-500 mb-4 pb-4 border-b border-gray-100">
+                                    <div className="flex items-center gap-2">
+                                        <MapPin size={12} className="text-gray-400"/>
+                                        <span>{pkg.location}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={12} className="text-gray-400"/>
+                                        <span className="font-bold text-red-500">회수 마감: {pkg.deadline}</span>
+                                    </div>
+                                    <p className="text-gray-400 mt-1 line-clamp-1">{pkg.description}</p>
+                                </div>
+
+                                <div className="flex gap-1.5 flex-wrap mb-4">
+                                    {pkg.badges.map((b, i) => (
+                                        <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-medium rounded border border-gray-200">
+                                            {b}
+                                        </span>
+                                    ))}
+                                </div>
+
+                                <div className="mt-auto">
+                                    <div className="mb-3">
+                                        <span className="text-[10px] text-gray-400 block mb-0.5">희망가 (협의가능)</span>
+                                        <div className="flex items-baseline justify-between">
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-xl font-black text-slate-900">{pkg.hopePrice?.toLocaleString()}</span>
+                                                <span className="text-sm font-bold text-slate-900">원</span>
+                                            </div>
+                                            {/* Compare Checkbox (Added) */}
+                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
+                                                <label className="flex items-center gap-1 cursor-pointer select-none">
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isCompared ? 'bg-brand-600 border-brand-600' : 'bg-white border-gray-300'}`}>
+                                                        {isCompared && <Check size={12} className="text-white" />}
+                                                    </div>
+                                                    <input type="checkbox" checked={isCompared} onChange={(e) => toggleCompare(pkg.id, e as any)} className="hidden" />
+                                                    <span className={`text-xs font-bold ${isCompared ? 'text-brand-600' : 'text-gray-400'}`}>비교</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <Button 
+                                        fullWidth
+                                        variant="primary"
+                                        onClick={(e) => { e.stopPropagation(); onConsultingClick(pkg); }}
+                                        className="h-10 text-sm shadow-none bg-slate-800 hover:bg-slate-700"
+                                    >
+                                        패키지 없이 상담
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
-                    </Card>
-                ))
+                        </Card>
+                    )
+                })
             )}
         </div>
       </main>
+
+      {/* Detail Modal */}
+      {selectedPackageDetail && renderDetailView()}
     </div>
   );
 };
