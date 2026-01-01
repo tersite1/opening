@@ -106,3 +106,92 @@ export const uploadConsultingFile = async (consultingId: string, file: File) => 
 
     return updatedFiles;
 };
+
+export const fetchQuotes = async (): Promise<Quote[]> => {
+  const { data, error } = await supabase
+    .from('quotes')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching quotes:', error);
+    return [];
+  }
+
+  return data.map((item: any) => ({
+    id: item.id,
+    packageId: item.package_id,
+    packageName: item.package_name,
+    
+    itemsCost: item.items_cost,
+    logisticsCost: item.logistics_cost,
+    installationCost: item.installation_cost,
+    optionsCost: item.options_cost,
+    discountAmount: item.discount_amount,
+    vat: item.vat,
+    totalCost: item.total_cost,
+    deposit: item.deposit,
+    
+    date: new Date(item.created_at).toLocaleDateString(),
+    validUntil: item.valid_until,
+    status: item.status,
+    version: item.version,
+    
+    scope: item.scope || [],
+    timeline: item.timeline || [],
+    requirements: item.requirements || [],
+    
+    grade: item.grade,
+    warrantyPeriod: item.warranty_period,
+    
+    has3D: item.has_3d,
+    is3DLinkSent: item.is_3d_link_sent,
+    consultingIncluded: item.consulting_included
+  })) as Quote[];
+};
+
+// [추가] 견적서 저장하기
+export const createQuote = async (quote: Quote) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+
+  const { data, error } = await supabase
+    .from('quotes')
+    .insert([
+      {
+        id: quote.id, // 앱에서 생성한 QT-XXXX ID 사용
+        user_id: user.id,
+        package_id: quote.packageId,
+        package_name: quote.packageName,
+        
+        items_cost: quote.itemsCost,
+        logistics_cost: quote.logisticsCost,
+        installation_cost: quote.installationCost,
+        options_cost: quote.optionsCost,
+        discount_amount: quote.discountAmount,
+        vat: quote.vat,
+        total_cost: quote.totalCost,
+        deposit: quote.deposit,
+        
+        valid_until: quote.validUntil, // Date string formatting might be needed depending on input
+        status: quote.status,
+        version: quote.version,
+        
+        scope: quote.scope,
+        timeline: quote.timeline,
+        requirements: quote.requirements,
+        
+        grade: quote.grade,
+        warranty_period: quote.warrantyPeriod,
+        
+        has_3d: quote.has3D,
+        is_3d_link_sent: quote.is3DLinkSent,
+        consulting_included: quote.consultingIncluded
+      }
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
