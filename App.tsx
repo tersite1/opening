@@ -23,7 +23,7 @@ import { QuoteView } from './components/QuoteView';
 import { FAQView } from './components/FAQView';
 import { ListingsView } from './components/ListingsView';
 import { Button, Input } from './components/Components';
-import { ArrowLeft, Grid, Info, Ruler, AlertCircle, CheckCircle, FileText, ChevronRight, Truck, DoorOpen, X, ShoppingBag, Calendar } from 'lucide-react';
+import { ArrowLeft, Grid, DoorOpen, X } from 'lucide-react';
 
 function App() {
   // Loading State
@@ -37,7 +37,7 @@ function App() {
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [consultingBookings, setConsultingBookings] = useState<ConsultingBooking[]>([]);
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [savedQuotes, setSavedQuotes] = useState<Quote[]>([]); // New state for saved quotes
+  const [savedQuotes, setSavedQuotes] = useState<Quote[]>([]); 
 
   // Planner State
   const [room, setRoom] = useState<RoomDimensions>({
@@ -49,16 +49,14 @@ function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 2500); // 2.5 seconds splash screen
+    }, 2500); 
     return () => clearTimeout(timer);
   }, []);
 
   // --- Actions ---
 
-  // 1. Open Planner Flow (from Home or Listing)
   const startPlannerFlow = (pkg: Package) => {
     setSelectedPackage(pkg);
-    // Initialize items
     const initialItems: PlacedItem[] = pkg.items.map((item, idx) => ({
       ...item,
       instanceId: `${item.id}_${idx}_${Date.now()}`,
@@ -73,12 +71,11 @@ function App() {
     setAppMode('SPACE_INPUT');
   };
 
-  // 2. Open Consulting Flow
   const startConsultingFlow = (pkg?: Package) => {
     if (pkg) {
         setSelectedPackage(pkg);
     } else {
-        setSelectedPackage(null); // General consulting
+        setSelectedPackage(null); 
     }
     setAppMode('CONSULTING_WIZARD');
   };
@@ -87,10 +84,9 @@ function App() {
     const newBooking = { ...booking, id: `bk_${Date.now()}`, consultantName: '김오픈 프로', typeLabel: '창업 진단 30분' };
     setConsultingBookings([newBooking, ...consultingBookings]);
     setAppMode('TAB_VIEW');
-    setCurrentTab('CONSULTING'); // Go to My Consultations
+    setCurrentTab('CONSULTING'); 
   };
 
-  // 3. Planner Logic
   const handleSpaceSubmit = () => {
      if (room.width < 200 || room.depth < 200) {
       alert("공간이 너무 작습니다.");
@@ -101,7 +97,6 @@ function App() {
   };
 
   const handlePlannerNext = () => {
-    // Generate Quote
     if (selectedPackage) {
       const itemsCost = selectedPackage.totalPrice; 
       const total = itemsCost + LOGISTICS_BASE_COST + INSTALLATION_BASE_COST;
@@ -147,13 +142,9 @@ function App() {
     );
   }
 
-  // Helper to wrap overlays in a modal on desktop, full screen on mobile
   const ModalWrapper: React.FC<{ children: React.ReactNode, title: string, onClose: () => void, maxWidth?: string }> = ({ children, title, onClose, maxWidth = 'max-w-xl' }) => (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-        {/* Backdrop */}
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-        
-        {/* Modal Content */}
         <div className={`relative bg-white w-full ${maxWidth} h-[95vh] md:h-auto md:max-h-[85vh] md:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 transform translate-y-0`}>
              <div className="h-14 border-b flex items-center justify-between px-4 bg-white shrink-0">
                   <div className="flex items-center gap-3">
@@ -209,7 +200,6 @@ function App() {
         );
 
       case 'PLANNER':
-         // Planner uses full screen overlay on desktop too, but maybe with some padding or different close button
          return (
              <div className="fixed inset-0 bg-slate-100 z-50 flex flex-col md:p-6 md:bg-black/80 md:backdrop-blur-sm">
                  <div className="bg-white flex-1 flex flex-col md:rounded-2xl md:shadow-2xl overflow-hidden relative">
@@ -282,19 +272,17 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-row overflow-hidden">
       
-      {/* Desktop Sidebar */}
       <Sidebar currentTab={currentTab} onTabChange={setCurrentTab} className="hidden md:flex" />
 
-      {/* Main Content Area */}
       <main className="flex-1 w-full relative h-screen overflow-y-auto no-scrollbar scroll-smooth">
-        {/* Container */}
         <div className="w-full mx-auto bg-white min-h-screen shadow-none md:max-w-none md:bg-white pb-20 md:pb-0">
             
-            {/* Views */}
             {currentTab === 'HOME' && (
             <HomeView 
                 onPackageSelect={startPlannerFlow} 
                 onConsultingClick={startConsultingFlow} 
+                consultingBookings={consultingBookings} 
+                onNavigateToConsulting={() => setCurrentTab('CONSULTING')} 
             />
             )}
 
@@ -325,12 +313,10 @@ function App() {
         </div>
       </main>
 
-      {/* Mobile Bottom Nav */}
       <div className="md:hidden">
           <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
       </div>
 
-      {/* Overlays (Wizard / Planner) */}
       {appMode !== 'TAB_VIEW' && renderWizardContent()}
 
     </div>
