@@ -14,8 +14,7 @@ import {
   INSTALLATION_BASE_COST
 } from './constants';
 import { supabase } from './utils/supabaseClient';
-// [수정] 견적 API (fetchQuotes, createQuote) 추가
-import { fetchConsultings, createConsulting, fetchQuotes, createQuote } from './utils/api'; 
+import { fetchConsultings, createConsulting, fetchQuotes, createQuote } from './utils/api';
 import { Planner2D } from './components/Planner2D';
 import { ConsultingModule } from './components/ConsultingModule';
 import { validateLayout } from './utils/plannerUtils';
@@ -30,51 +29,40 @@ import { Button, Input } from './components/Components';
 import { ArrowLeft, Grid, DoorOpen, X } from 'lucide-react';
 
 function App() {
-  // Loading State
   const [isLoading, setIsLoading] = useState(true);
-
-  // Navigation State
   const [currentTab, setCurrentTab] = useState<MainTab>('HOME');
   const [appMode, setAppMode] = useState<AppStep>('TAB_VIEW'); 
 
-  // Data State
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [consultingBookings, setConsultingBookings] = useState<ConsultingBooking[]>([]);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [savedQuotes, setSavedQuotes] = useState<Quote[]>([]); 
-  
-  // User State
   const [user, setUser] = useState<User | null>(null);
 
-  // Planner State
   const [room, setRoom] = useState<RoomDimensions>({
     width: 500, depth: 400, height: 250, doorX: 200, doorWidth: 90
   });
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
 
-  // 1. 초기 로딩 및 Supabase Auth 상태 감지
   useEffect(() => {
-    // 세션 체크 (새로고침 시 로그인 유지)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser({
           id: session.user.id,
           name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || '사장님',
           phone: session.user.email || '', 
-          type: 'KAKAO', // provider 정보는 session에서 확인 가능하나 일단 고정
+          type: 'KAKAO',
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
         
-        // [수정] 로그인 상태면 상담 내역과 견적 내역 모두 불러오기
         Promise.all([
           fetchConsultings().then(setConsultingBookings),
           fetchQuotes().then(setSavedQuotes)
         ]).catch(console.error);
       }
-      setIsLoading(false); // 로딩 끝
+      setIsLoading(false);
     });
 
-    // 로그인/로그아웃 이벤트 리스너
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -84,14 +72,13 @@ function App() {
           type: 'KAKAO',
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
-        // [수정] 로그인 시 데이터 병렬 로딩
         Promise.all([
           fetchConsultings().then(setConsultingBookings),
           fetchQuotes().then(setSavedQuotes)
         ]).catch(console.error);
       } else {
         setUser(null);
-        setConsultingBookings([]); // 로그아웃 시 데이터 초기화
+        setConsultingBookings([]);
         setSavedQuotes([]);
       }
       setIsLoading(false);
@@ -100,14 +87,11 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. 로그아웃 핸들러
   const handleLogout = async () => {
       await supabase.auth.signOut();
       setUser(null);
       setCurrentTab('HOME'); 
   };
-
-  // --- Actions ---
 
   const startPlannerFlow = (pkg: Package) => {
     setSelectedPackage(pkg);
@@ -134,17 +118,11 @@ function App() {
     setAppMode('CONSULTING_WIZARD');
   };
 
-  // 상담 신청 완료 핸들러 (DB 저장 연동)
   const handleConsultingComplete = async (booking: ConsultingBooking) => {
     try {
-      // 1. DB에 저장
       await createConsulting(booking);
-      
-      // 2. 최신 목록 다시 불러오기
       const updatedList = await fetchConsultings();
       setConsultingBookings(updatedList);
-      
-      // 3. 화면 이동 및 알림
       setAppMode('TAB_VIEW');
       setCurrentTab('CONSULTING'); 
       alert("상담 신청이 성공적으로 접수되었습니다.");
@@ -220,7 +198,13 @@ function App() {
         
         has3D: selectedPackage.has3D,
         is3DLinkSent: false,
-        consultingIncluded: false
+        consultingIncluded: false,
+
+        // [추가됨] 3D 배치 데이터 포함 ✅
+        layoutData: {
+            room: room,
+            placedItems: placedItems
+        }
       };
       
       setQuote(newQuote);
@@ -228,17 +212,12 @@ function App() {
     }
   };
 
-  // [수정] 견적 저장 핸들러 (DB 연동)
   const handleSaveQuote = async () => {
       if(quote) {
           try {
-              // 1. DB에 저장
               await createQuote(quote);
-              
-              // 2. 최신 목록 다시 불러오기
               const updatedQuotes = await fetchQuotes();
               setSavedQuotes(updatedQuotes);
-              
               alert("견적이 안전하게 저장되었습니다.");
               setAppMode('TAB_VIEW');
               setCurrentTab('QUOTE');
@@ -248,8 +227,6 @@ function App() {
           }
       }
   }
-
-  // --- Render Views ---
 
   if (isLoading) {
     return (
@@ -391,12 +368,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-row overflow-hidden">
-      
       <Sidebar currentTab={currentTab} onTabChange={setCurrentTab} className="hidden md:flex" />
-
       <main className="flex-1 w-full relative h-screen overflow-y-auto no-scrollbar scroll-smooth">
         <div className="w-full mx-auto bg-white min-h-screen shadow-none md:max-w-none md:bg-white pb-20 md:pb-0">
-            
             {currentTab === 'HOME' && (
             <HomeView 
                 onPackageSelect={startPlannerFlow} 
@@ -405,28 +379,24 @@ function App() {
                 onNavigateToConsulting={() => setCurrentTab('CONSULTING')} 
             />
             )}
-
             {currentTab === 'CONSULTING' && (
                 <MyConsultationsView 
                     bookings={consultingBookings}
                     onBookConsulting={() => startConsultingFlow()}
                 />
             )}
-
             {currentTab === 'LISTINGS' && (
                 <ListingsView 
                     onPackageSelect={startPlannerFlow} 
                     onConsultingClick={startConsultingFlow}
                 />
             )}
-
             {currentTab === 'QUOTE' && (
                 <QuoteView 
                     quotes={savedQuotes}
                     onConsultingClick={() => startConsultingFlow()}
                 />
             )}
-
             {currentTab === 'MORE' && (
                 <MoreView 
                     user={user}
@@ -438,13 +408,10 @@ function App() {
             )}
         </div>
       </main>
-
       <div className="md:hidden">
           <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
       </div>
-
       {appMode !== 'TAB_VIEW' && renderWizardContent()}
-
     </div>
   );
 }
