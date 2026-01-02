@@ -29,52 +29,58 @@ import { FAQView } from './components/FAQView';
 import { Button, Input } from './components/Components';
 import { ArrowLeft, Grid, DoorOpen, X } from 'lucide-react';
 
-function App() {
-  // Loading State
-  const [isLoading, setIsLoading] = useState(true);
+// [수정] 기본 관리자 계정 정보 정의
+const ADMIN_USER: User = {
+  id: 'admin-test-id',
+  name: '관리자',
+  phone: '010-1234-5678', 
+  type: 'PHONE',
+  joinedDate: new Date().toLocaleDateString()
+};
 
-  // Navigation State
+function App() {
+  const [isLoading, setIsLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState<MainTab>('HOME');
   const [appMode, setAppMode] = useState<AppStep>('TAB_VIEW'); 
 
-  // Data State
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [consultingBookings, setConsultingBookings] = useState<ConsultingBooking[]>([]);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [savedQuotes, setSavedQuotes] = useState<Quote[]>([]); 
   
-  // User State
-  const [user, setUser] = useState<User | null>(null);
+  // [수정] 초기 상태를 ADMIN_USER로 설정
+  const [user, setUser] = useState<User | null>(ADMIN_USER);
 
-  // Planner State
   const [room, setRoom] = useState<RoomDimensions>({
     width: 500, depth: 400, height: 250, doorX: 200, doorWidth: 90
   });
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
 
-  // 1. 초기 로딩 및 Supabase Auth 상태 감지
   useEffect(() => {
-    // 세션 체크 (새로고침 시 로그인 유지)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        // 실제 로그인 세션이 있으면 그 정보 사용
         setUser({
           id: session.user.id,
           name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || '사장님',
           phone: session.user.email || '', 
-          type: 'KAKAO', // provider 정보는 session에서 확인 가능하나 일단 고정
+          type: 'KAKAO', 
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
-        
-        // 로그인 상태면 상담 내역과 견적 내역 모두 불러오기
-        Promise.all([
-          fetchConsultings().then(setConsultingBookings),
-          fetchQuotes().then(setSavedQuotes)
-        ]).catch(console.error);
+      } else {
+        // [수정] 세션이 없어도 관리자로 강제 설정
+        setUser(ADMIN_USER);
       }
-      setIsLoading(false); // 로딩 끝
+      
+      // 데이터 로딩 (로그인 여부와 상관없이 시도)
+      Promise.all([
+        fetchConsultings().then(setConsultingBookings),
+        fetchQuotes().then(setSavedQuotes)
+      ]).catch(console.error);
+
+      setIsLoading(false); 
     });
 
-    // 로그인/로그아웃 이벤트 리스너
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -84,26 +90,27 @@ function App() {
           type: 'KAKAO',
           joinedDate: new Date(session.user.created_at).toLocaleDateString()
         });
-        // 로그인 시 데이터 병렬 로딩
-        Promise.all([
-          fetchConsultings().then(setConsultingBookings),
-          fetchQuotes().then(setSavedQuotes)
-        ]).catch(console.error);
       } else {
-        setUser(null);
-        setConsultingBookings([]); // 로그아웃 시 데이터 초기화
-        setSavedQuotes([]);
+        // [수정] 로그아웃 시에도 관리자로 유지
+        setUser(ADMIN_USER);
       }
+      
+      // 데이터 갱신
+      Promise.all([
+        fetchConsultings().then(setConsultingBookings),
+        fetchQuotes().then(setSavedQuotes)
+      ]).catch(console.error);
+      
       setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. 로그아웃 핸들러
   const handleLogout = async () => {
       await supabase.auth.signOut();
-      setUser(null);
+      // [수정] 로그아웃 시 관리자로 재설정 (또는 null로 설정 후 홈으로 이동)
+      setUser(ADMIN_USER);
       setCurrentTab('HOME'); 
   };
 
@@ -134,17 +141,11 @@ function App() {
     setAppMode('CONSULTING_WIZARD');
   };
 
-  // 상담 신청 완료 핸들러 (DB 저장 연동)
   const handleConsultingComplete = async (booking: ConsultingBooking) => {
     try {
-      // 1. DB에 저장
       await createConsulting(booking);
-      
-      // 2. 최신 목록 다시 불러오기
       const updatedList = await fetchConsultings();
       setConsultingBookings(updatedList);
-      
-      // 3. 화면 이동 및 알림
       setAppMode('TAB_VIEW');
       setCurrentTab('CONSULTING'); 
       alert("상담 신청이 성공적으로 접수되었습니다.");
@@ -222,7 +223,6 @@ function App() {
         is3DLinkSent: false,
         consultingIncluded: false,
 
-        // 3D 배치 데이터 포함
         layoutData: {
             room: room,           
             placedItems: placedItems 
@@ -237,10 +237,7 @@ function App() {
   const handleSaveQuote = async () => {
       if(quote) {
           try {
-              // 1. DB에 저장
               await createQuote(quote);
-              
-              // 2. 최신 목록 다시 불러오기
               const updatedQuotes = await fetchQuotes();
               setSavedQuotes(updatedQuotes);
               
@@ -249,30 +246,23 @@ function App() {
               setCurrentTab('QUOTE');
           } catch (error) {
               console.error("견적 저장 실패:", error);
-              alert("견적 저장에 실패했습니다. 로그인 상태를 확인해주세요.");
+              // [수정] 에러 메시지 상세화
+              alert("견적 저장에 실패했습니다. (DB 권한 오류일 수 있습니다)");
           }
       }
   }
 
-  // [신규 기능] 저장된 견적(배치도) 불러오기 핸들러
   const handleLoadQuote = (loadedQuote: Quote) => {
     if (!loadedQuote.layoutData) {
         alert("이 견적에는 저장된 배치 정보가 없습니다.");
         return;
     }
 
-    // 1. 견적에 저장된 배치 정보 복원
     setRoom(loadedQuote.layoutData.room);
     setPlacedItems(loadedQuote.layoutData.placedItems);
-    
-    // 2. 현재 작업 중인 견적 상태로 설정
     setQuote(loadedQuote); 
-
-    // 3. 플래너 모드로 진입하여 수정 가능하게 함
     setAppMode('PLANNER');
   };
-
-  // --- Render Views ---
 
   if (isLoading) {
     return (
@@ -447,7 +437,7 @@ function App() {
                 <QuoteView 
                     quotes={savedQuotes}
                     onConsultingClick={() => startConsultingFlow()}
-                    onLoadQuote={handleLoadQuote} // [연결] 배치도 불러오기 함수 전달
+                    onLoadQuote={handleLoadQuote}
                 />
             )}
 
