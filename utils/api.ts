@@ -107,7 +107,7 @@ export const uploadConsultingFile = async (consultingId: string, file: File) => 
     return updatedFiles;
 };
 
-// 4. 견적서 목록 불러오기
+// 4. 견적서 목록 불러오기 (layoutData 매핑 추가)
 export const fetchQuotes = async (): Promise<Quote[]> => {
   const { data, error } = await supabase
     .from('quotes')
@@ -147,11 +147,14 @@ export const fetchQuotes = async (): Promise<Quote[]> => {
     
     has3D: item.has_3d,
     is3DLinkSent: item.is_3d_link_sent,
-    consultingIncluded: item.consulting_included
+    consultingIncluded: item.consulting_included,
+
+    // [수정] 3D 배치 데이터 매핑
+    layoutData: item.layout_data || null
   })) as Quote[];
 };
 
-// 5. 견적서 저장하기
+// 5. 견적서 저장하기 (layout_data 저장 추가)
 export const createQuote = async (quote: Quote) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다.');
@@ -187,7 +190,10 @@ export const createQuote = async (quote: Quote) => {
         
         has_3d: quote.has3D,
         is_3d_link_sent: quote.is3DLinkSent,
-        consulting_included: quote.consultingIncluded
+        consulting_included: quote.consultingIncluded,
+
+        // [수정] 3D 배치 데이터 저장
+        layout_data: quote.layoutData
       }
     ])
     .select()
