@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import { ConsultingBooking, Quote } from '../types';
 
-// 1. 상담 내역 불러오기 (files 컬럼 포함)
+// 1. 상담 내역 불러오기
 export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
   const { data, error } = await supabase
     .from('consultings')
@@ -13,7 +13,6 @@ export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
     return [];
   }
 
-  // DB 데이터 -> 앱 데이터 타입 변환
   return data.map((item: any) => ({
     id: item.id,
     businessType: item.business_type,
@@ -22,7 +21,7 @@ export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
     budget: item.budget,
     targetDate: item.target_date,
     status: item.status,
-    consultantName: '김오픈 프로', // 임시 고정
+    consultantName: '김오픈 프로',
     typeLabel: '맞춤 오픈 상담',
     selectedTaskIds: item.selected_task_ids || [],
     taskDetails: item.task_details || [],
@@ -31,7 +30,7 @@ export const fetchConsultings = async (): Promise<ConsultingBooking[]> => {
   })) as ConsultingBooking[];
 };
 
-// 2. 상담 신청하기 (저장)
+// 2. 상담 신청하기
 export const createConsulting = async (booking: ConsultingBooking) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다.');
@@ -49,7 +48,7 @@ export const createConsulting = async (booking: ConsultingBooking) => {
         status: 'PENDING',
         selected_task_ids: booking.selectedTaskIds,
         task_details: booking.taskDetails,
-        files: [] // 초기 파일은 빈 배열
+        files: []
       }
     ])
     .select()
@@ -59,26 +58,21 @@ export const createConsulting = async (booking: ConsultingBooking) => {
   return data;
 };
 
-// 3. 파일 업로드 함수 (Storage + DB Update)
+// 3. 파일 업로드
 export const uploadConsultingFile = async (consultingId: string, file: File) => {
-    // A. Storage에 파일 업로드
     const fileExt = file.name.split('.').pop();
-    // 파일명 중복 방지를 위해 timestamp 추가
     const fileName = `${consultingId}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
     
     const { error: uploadError } = await supabase.storage
-        .from('uploads') // 'uploads' 버킷 사용
+        .from('uploads')
         .upload(fileName, file);
 
     if (uploadError) throw uploadError;
 
-    // B. 업로드된 파일의 공개 URL 가져오기
     const { data: { publicUrl } } = supabase.storage
         .from('uploads')
         .getPublicUrl(fileName);
 
-    // C. DB 업데이트 (기존 파일 목록에 추가)
-    // 먼저 현재 파일 목록을 가져옵니다.
     const { data: currentData, error: fetchError } = await supabase
         .from('consultings')
         .select('files')
@@ -96,7 +90,6 @@ export const uploadConsultingFile = async (consultingId: string, file: File) => 
     
     const updatedFiles = [...(currentData.files || []), newFile];
 
-    // DB에 저장
     const { error: updateError } = await supabase
         .from('consultings')
         .update({ files: updatedFiles })
@@ -107,7 +100,7 @@ export const uploadConsultingFile = async (consultingId: string, file: File) => 
     return updatedFiles;
 };
 
-// 4. 견적서 목록 불러오기 (layoutData 매핑 추가)
+// 4. 견적서 목록 불러오기 (layoutData 매핑 추가됨 ✅)
 export const fetchQuotes = async (): Promise<Quote[]> => {
   const { data, error } = await supabase
     .from('quotes')
@@ -149,12 +142,12 @@ export const fetchQuotes = async (): Promise<Quote[]> => {
     is3DLinkSent: item.is_3d_link_sent,
     consultingIncluded: item.consulting_included,
 
-    // [수정] 3D 배치 데이터 매핑
-    layoutData: item.layout_data || null
+    // [중요] DB의 layout_data를 앱의 layoutData로 연결
+    layoutData: item.layout_data || null 
   })) as Quote[];
 };
 
-// 5. 견적서 저장하기 (layout_data 저장 추가)
+// 5. 견적서 저장하기 (layout_data 저장 추가됨 ✅)
 export const createQuote = async (quote: Quote) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다.');
@@ -163,7 +156,7 @@ export const createQuote = async (quote: Quote) => {
     .from('quotes')
     .insert([
       {
-        id: quote.id, // 앱에서 생성한 QT-XXXX ID 사용
+        id: quote.id,
         user_id: user.id,
         package_id: quote.packageId,
         package_name: quote.packageName,
@@ -192,8 +185,8 @@ export const createQuote = async (quote: Quote) => {
         is_3d_link_sent: quote.is3DLinkSent,
         consulting_included: quote.consultingIncluded,
 
-        // [수정] 3D 배치 데이터 저장
-        layout_data: quote.layoutData
+        // [중요] 3D 배치 데이터 저장
+        layout_data: quote.layoutData 
       }
     ])
     .select()
