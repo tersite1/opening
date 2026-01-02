@@ -171,6 +171,12 @@ export interface Quote {
   has3D: boolean;
   is3DLinkSent: boolean;
   consultingIncluded: boolean;
+
+  // [New] 3D Layout Data (Storage for Planner state)
+  layoutData?: {
+    room: RoomDimensions;
+    placedItems: PlacedItem[];
+  };
 }
 
 // Consulting Types
@@ -233,6 +239,9 @@ export interface ConsultingBooking {
   selectedTaskIds: string[];
   taskDetails?: TaskDetailData[]; // Details per task
   
+  // [Added] File Attachments
+  files?: { name: string; url: string; status: string; uploadedAt?: string }[];
+
   date: string; // Booking date
   timeSlot?: string;
   
