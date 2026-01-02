@@ -258,7 +258,7 @@ export interface CategoryNode {
 }
 
 // Navigation Types
-export type MainTab = 'HOME' | 'LISTINGS' | 'QUOTE' | 'CONSULTING' | 'MORE';
+export type MainTab = 'HOME' | 'LISTINGS' | 'QUOTE' | 'CONSULTING' | 'MORE' | 'FAQ'; // [Updated] Added FAQ
 
 export type AppStep = 
   | 'TAB_VIEW' // Shows the main tabs
