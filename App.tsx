@@ -233,7 +233,6 @@ function App() {
     }
   };
 
-  // 견적 저장 핸들러 (DB 연동)
   const handleSaveQuote = async () => {
       if(quote) {
           try {
