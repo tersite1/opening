@@ -221,7 +221,7 @@ function App() {
         is3DLinkSent: false,
         consultingIncluded: false,
 
-        // [★ 추가됨] 현재 플래너의 상태(방 크기, 가구 배치)를 견적서에 포함
+        // 3D 배치 데이터 포함
         layoutData: {
             room: room,           
             placedItems: placedItems 
@@ -252,6 +252,24 @@ function App() {
           }
       }
   }
+
+  // [신규 기능] 저장된 견적(배치도) 불러오기 핸들러
+  const handleLoadQuote = (loadedQuote: Quote) => {
+    if (!loadedQuote.layoutData) {
+        alert("이 견적에는 저장된 배치 정보가 없습니다.");
+        return;
+    }
+
+    // 1. 견적에 저장된 배치 정보 복원
+    setRoom(loadedQuote.layoutData.room);
+    setPlacedItems(loadedQuote.layoutData.placedItems);
+    
+    // 2. 현재 작업 중인 견적 상태로 설정
+    setQuote(loadedQuote); 
+
+    // 3. 플래너 모드로 진입하여 수정 가능하게 함
+    setAppMode('PLANNER');
+  };
 
   // --- Render Views ---
 
@@ -428,6 +446,7 @@ function App() {
                 <QuoteView 
                     quotes={savedQuotes}
                     onConsultingClick={() => startConsultingFlow()}
+                    onLoadQuote={handleLoadQuote} // [연결] 배치도 불러오기 함수 전달
                 />
             )}
 
