@@ -25,6 +25,7 @@ import { MyConsultationsView } from './components/MyConsultationsView';
 import { QuoteView } from './components/QuoteView';
 import { MoreView } from './components/MoreView';
 import { ListingsView } from './components/ListingsView';
+import { FAQView } from './components/FAQView';
 import { Button, Input } from './components/Components';
 import { ArrowLeft, Grid, DoorOpen, X } from 'lucide-react';
 
@@ -448,6 +449,10 @@ function App() {
                     onConsultingClick={() => startConsultingFlow()}
                     onLoadQuote={handleLoadQuote} // [연결] 배치도 불러오기 함수 전달
                 />
+            )}
+
+            {currentTab === 'FAQ' && (
+                <FAQView />
             )}
 
             {currentTab === 'MORE' && (
